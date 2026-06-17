@@ -1,0 +1,518 @@
+{
+ "actions": [],
+ "autoname": "format:IS-{YYYY}-{#####}",
+ "creation": "2026-05-21 11:33:10.689815",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "session_section",
+  "campaign",
+  "company",
+  "warehouse",
+  "status",
+  "operator_column",
+  "operator_user",
+  "operator_name",
+  "device_id",
+  "scope_section",
+  "zone",
+  "item_group",
+  "timing_section",
+  "opened_at",
+  "closed_at",
+  "submitted_at",
+  "server_ack_at",
+  "items_section",
+  "items",
+  "summary_section",
+  "total_items_counted",
+  "total_qty_counted",
+  "import_section",
+  "imported_stock_reconciliation",
+  "imported_at",
+  "technical_section",
+  "raw_payload_json",
+  "notes",
+  "mobile_section",
+  "mobile_session_id",
+  "source",
+  "inventory_agent",
+  "parent_warehouse",
+  "locations_section",
+  "locations",
+  "submitted_from_mobile",
+  "submit_retry_count",
+  "location_warehouse",
+  "unplanned_section",
+  "unplanned_items_json",
+  "unplanned_warehouses_json",
+  "unplanned_summary_column",
+  "has_unplanned_items",
+  "unplanned_items_count",
+  "has_unplanned_warehouses",
+  "unplanned_warehouses_count",
+  "review_section",
+  "review_status",
+  "reviewed_by",
+  "reviewed_at",
+  "review_note",
+  "recoding_summary_section",
+  "has_recoding_proposals",
+  "recoding_proposals_count",
+  "submit_payload_hash",
+  "imported_by",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "session_section",
+   "fieldtype": "Section Break",
+   "label": "Session"
+  },
+  {
+   "fieldname": "campaign",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Inventory Campaign",
+   "options": "Inventory Campaign",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "description": "Compatibility field; normally same as parent_warehouse.",
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Warehouse",
+   "options": "Warehouse",
+   "reqd": 1
+  },
+  {
+   "default": "Submitted",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Submitted\nImported\nRejected\nCancelled\nFailed",
+   "reqd": 1
+  },
+  {
+   "fieldname": "operator_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Optional ERPNext user for manual/back-office trace only.",
+   "fieldname": "operator_user",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Operator User",
+   "options": "User"
+  },
+  {
+   "fieldname": "operator_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Operator Name"
+  },
+  {
+   "fieldname": "device_id",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Device ID"
+  },
+  {
+   "fieldname": "scope_section",
+   "fieldtype": "Section Break",
+   "label": "Session Scope"
+  },
+  {
+   "description": "Optional physical zone, aisle, shelf range, or counting area.",
+   "fieldname": "zone",
+   "fieldtype": "Data",
+   "label": "Zone"
+  },
+  {
+   "fieldname": "item_group",
+   "fieldtype": "Link",
+   "label": "Item Group",
+   "options": "Item Group"
+  },
+  {
+   "fieldname": "timing_section",
+   "fieldtype": "Section Break",
+   "label": "Timing"
+  },
+  {
+   "fieldname": "opened_at",
+   "fieldtype": "Datetime",
+   "label": "Opened At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_at",
+   "fieldtype": "Datetime",
+   "label": "Closed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "submitted_at",
+   "fieldtype": "Datetime",
+   "label": "Submitted At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "server_ack_at",
+   "fieldtype": "Datetime",
+   "label": "Server ACK At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "items_section",
+   "fieldtype": "Section Break",
+   "label": "Counted Items"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Inventory Session Item"
+  },
+  {
+   "fieldname": "summary_section",
+   "fieldtype": "Section Break",
+   "label": "Summary"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_items_counted",
+   "fieldtype": "Int",
+   "label": "Total Items Counted",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_qty_counted",
+   "fieldtype": "Float",
+   "label": "Total Quantity Counted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "import_section",
+   "fieldtype": "Section Break",
+   "label": "Stock Reconciliation Import"
+  },
+  {
+   "fieldname": "imported_stock_reconciliation",
+   "fieldtype": "Link",
+   "label": "Imported Stock Reconciliation",
+   "options": "Stock Reconciliation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "imported_at",
+   "fieldtype": "Datetime",
+   "label": "Imported At",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "technical_section",
+   "fieldtype": "Section Break",
+   "label": "Technical"
+  },
+  {
+   "fieldname": "raw_payload_json",
+   "fieldtype": "Code",
+   "label": "Raw Payload JSON",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "mobile_section",
+   "fieldtype": "Section Break",
+   "label": "Mobile Session"
+  },
+  {
+   "description": "Unique ID generated by the mobile app. Used for idempotent submit.",
+   "fieldname": "mobile_session_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Mobile Session ID",
+   "unique": 1
+  },
+  {
+   "default": "Mobile App",
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Source",
+   "options": "Mobile App\nManual"
+  },
+  {
+   "description": "Operational inventory agent. This is not an ERPNext User.",
+   "fieldname": "inventory_agent",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Inventory Agent",
+   "options": "Inventory Agent"
+  },
+  {
+   "description": "Main warehouse / stock site.",
+   "fieldname": "parent_warehouse",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Parent Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "fieldname": "locations_section",
+   "fieldtype": "Section Break",
+   "label": "Locations / Emplacements"
+  },
+  {
+   "description": "Structured planned locations covered by this submitted session.",
+   "fieldname": "locations",
+   "fieldtype": "Table",
+   "label": "Locations",
+   "options": "Inventory Session Location"
+  },
+  {
+   "default": "1",
+   "fieldname": "submitted_from_mobile",
+   "fieldtype": "Check",
+   "label": "Submitted From Mobile"
+  },
+  {
+   "default": "0",
+   "fieldname": "submit_retry_count",
+   "fieldtype": "Int",
+   "label": "Submit Retry Count",
+   "read_only": 1
+  },
+  {
+   "description": "Main child Warehouse/emplacement used by the session when there is one primary location.",
+   "fieldname": "location_warehouse",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Location / Emplacement",
+   "options": "Warehouse"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "unplanned_section",
+   "fieldtype": "Section Break",
+   "label": "Unplanned Field Discoveries"
+  },
+  {
+   "description": "JSON evidence for items found on field but not authorized/planned. It must not auto-create Item or Item Group.",
+   "fieldname": "unplanned_items_json",
+   "fieldtype": "Code",
+   "label": "Unplanned Items JSON",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "description": "JSON evidence for locations/warehouses found on field but not authorized/planned. It must not auto-create Warehouse.",
+   "fieldname": "unplanned_warehouses_json",
+   "fieldtype": "Code",
+   "label": "Unplanned Warehouses JSON",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "unplanned_summary_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "has_unplanned_items",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Has Unplanned Items",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "unplanned_items_count",
+   "fieldtype": "Int",
+   "label": "Unplanned Items Count",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "has_unplanned_warehouses",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Has Unplanned Warehouses",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "unplanned_warehouses_count",
+   "fieldtype": "Int",
+   "label": "Unplanned Warehouses Count",
+   "read_only": 1
+  },
+  {
+   "fieldname": "review_section",
+   "fieldtype": "Section Break",
+   "label": "Supervisor Review"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "review_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Review Status",
+   "options": "Pending\nReviewed\nApproved\nRejected\nImported"
+  },
+  {
+   "fieldname": "reviewed_by",
+   "fieldtype": "Link",
+   "label": "Reviewed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reviewed_at",
+   "fieldtype": "Datetime",
+   "label": "Reviewed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "review_note",
+   "fieldtype": "Small Text",
+   "label": "Review Note"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "recoding_summary_section",
+   "fieldtype": "Section Break",
+   "label": "Recoding Summary"
+  },
+  {
+   "default": "0",
+   "fieldname": "has_recoding_proposals",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Has Recoding Proposals",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "recoding_proposals_count",
+   "fieldtype": "Int",
+   "label": "Recoding Proposals Count",
+   "read_only": 1
+  },
+  {
+   "description": "SHA-256 hash of the sanitized mobile submit payload. Used with mobile_session_id for safe idempotent ACK handling.",
+   "fieldname": "submit_payload_hash",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Submit Payload Hash",
+   "read_only": 1
+  },
+  {
+   "fieldname": "imported_by",
+   "fieldtype": "Link",
+   "label": "Imported By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Inventory Session",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-06-16 19:22:54.049274",
+ "modified_by": "Administrator",
+ "module": "Inventory Campaign",
+ "name": "Inventory Session",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Inventory Campaign Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "Inventory Campaign Operator",
+   "write": 1
+  },
+  {
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock User"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "mobile_session_id"
+}

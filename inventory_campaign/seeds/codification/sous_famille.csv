@@ -1,0 +1,46 @@
+name,code,description,famille
+CS-AM,AM,Adhésifs et produits de maintenance,CS
+CS-CA,CA,Consommables d'atelier,CS
+CS-EP,EP,EPI,CS
+CS-GC,GC,Lubrifiants et produits chimiques techniques,CS
+CS-JG,JG,Joints et garnitures,CS
+CS-MS,MS,Matériel de sécurité,CS
+CS-SC,SC,Outillage de soudure et consommables,CS
+EE-AU,AU,Automates,EE
+EE-CA,CA,Cartes,EE
+EE-CP,CP,Capteurs,EE
+EE-HM,HM,Modules HMI,EE
+EL-CA,CA,Câblage,EL
+EL-CO,CO,Contacteurs,EL
+EL-DI,DI,Disjoncteurs,EL
+EL-FU,FU,Fusibles,EL
+EL-MO,MO,Moteurs,EL
+EL-RE,RE,Relais,EL
+HY-DI,DI,Distributeurs,HY
+HY-FI,FI,Filtres( Haute pression),HY
+HY-FL,FL,Flexibles,HY
+HY-PO,PO,Pompes,HY
+HY-RA,RA,Raccords,HY
+HY-VE,VE,Vérins,HY
+IN-CP,CP,Capteurs pression,IN
+IN-DE,DE,Débit,IN
+IN-TE,TE,Température,IN
+IN-TH,TH,Thermocouples,IN
+IN-VA,VA,Variateurs,IN
+ME-CH,CH,Chaînes,ME
+ME-CO,CO,Courroies,ME
+ME-EN,EN,Engrenages,ME
+ME-JO,JO,Joints d'étanchéité,ME
+ME-RO,RO,Roulements,ME
+ME-VI,VI,Visserie,ME
+PN-CO,CO,Compressures,PN
+PN-DI,DI,Distributeurs,PN
+PN-EV,EV,Électrovannes,PN
+PN-RA,RA,Raccords,PN
+PN-RE,RE,Régulateurs,PN
+PN-TU,TU,Tuyauterie,PN
+PN-VE,VE,Vérins,PN
+SE-AL,AL,Alarmes,SE
+SE-EC,EC,Éclairage,SE
+SE-PM,PM,Protections machine Mec/Elec,SE
+SE-SI,SI,Signalisation,SE

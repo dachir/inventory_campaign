@@ -1,0 +1,278 @@
+{
+ "actions": [],
+ "autoname": "format:IAG-{YYYY}-{#####}",
+ "creation": "2026-05-22 12:44:28.487551",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "agent_section",
+  "agent_code",
+  "agent_name",
+  "status",
+  "contact_column",
+  "phone",
+  "email",
+  "company",
+  "authorization_section",
+  "authorized_locations",
+  "authorized_item_groups",
+  "notes_section",
+  "notes",
+  "token_section",
+  "agent_token",
+  "agent_token_hash",
+  "token_status",
+  "token_valid_from",
+  "token_valid_until",
+  "mobile_credential_ttl_minutes",
+  "device_section",
+  "bind_to_first_device",
+  "bound_device_id",
+  "bound_at",
+  "last_token_used_at",
+  "token_consumed_at",
+  "token_consumed_by_device",
+  "credential_issued_at",
+  "credential_expires_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "agent_section",
+   "fieldtype": "Section Break",
+   "label": "Agent"
+  },
+  {
+   "fieldname": "agent_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Agent Code",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "agent_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Agent Name",
+   "reqd": 1
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Active\nDisabled\nSuspended",
+   "reqd": 1
+  },
+  {
+   "fieldname": "contact_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Data",
+   "label": "Phone"
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "notes_section",
+   "fieldtype": "Section Break",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "authorization_section",
+   "fieldtype": "Section Break",
+   "label": "Authorized Scope"
+  },
+  {
+   "description": "Allowed child Warehouses/emplacements for this agent. No unplanned Warehouse is created automatically.",
+   "fieldname": "authorized_locations",
+   "fieldtype": "Table MultiSelect",
+   "label": "Authorized Locations / Emplacements",
+   "options": "Inventory Agent Authorized Location"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "token_section",
+   "fieldtype": "Section Break",
+   "label": "Agent Mobile Acces"
+  },
+  {
+   "description": "One-time clear token generated for mobile activation. It is consumed after the mobile credential is issued.",
+   "fieldname": "agent_token",
+   "fieldtype": "Data",
+   "label": "Agent Token"
+  },
+  {
+   "fieldname": "agent_token_hash",
+   "fieldtype": "Data",
+   "label": "Agent Token Hash",
+   "read_only": 1,
+   "unique": 1
+  },
+  {
+   "default": "Not Generated",
+   "fieldname": "token_status",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Token Status",
+   "options": "Not Generated\nActive\nConsumed\nRevoked\nExpired"
+  },
+  {
+   "fieldname": "token_valid_from",
+   "fieldtype": "Datetime",
+   "label": "Token Valid From"
+  },
+  {
+   "fieldname": "token_valid_until",
+   "fieldtype": "Datetime",
+   "label": "Token Valid Until"
+  },
+  {
+   "default": "480",
+   "fieldname": "mobile_credential_ttl_minutes",
+   "fieldtype": "Int",
+   "label": "Mobile Credential TTL Minutes"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "device_section",
+   "fieldtype": "Section Break",
+   "label": "Device Binding"
+  },
+  {
+   "default": "0",
+   "fieldname": "bind_to_first_device",
+   "fieldtype": "Check",
+   "label": "Bind To First Device"
+  },
+  {
+   "fieldname": "bound_device_id",
+   "fieldtype": "Data",
+   "label": "Bound Device ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bound_at",
+   "fieldtype": "Datetime",
+   "label": "Bound At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_token_used_at",
+   "fieldtype": "Datetime",
+   "label": "Last Token Used At",
+   "read_only": 1
+  },
+  {
+   "description": "Selected Item Groups used to calculate the stock Items authorized for this agent. Child Item Groups are included.",
+   "fieldname": "authorized_item_groups",
+   "fieldtype": "Table MultiSelect",
+   "label": "Authorized Item Groups",
+   "options": "Inventory Agent Authorized Item Group"
+  },
+  {
+   "fieldname": "token_consumed_at",
+   "fieldtype": "Datetime",
+   "label": "Token Consumed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "token_consumed_by_device",
+   "fieldtype": "Data",
+   "label": "Token Consumed By Device",
+   "read_only": 1
+  },
+  {
+   "fieldname": "credential_issued_at",
+   "fieldtype": "Datetime",
+   "label": "Credential Issued At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "credential_expires_at",
+   "fieldtype": "Datetime",
+   "label": "Credential Expires At",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-16 07:19:28.629042",
+ "modified_by": "Administrator",
+ "module": "Inventory Campaign",
+ "name": "Inventory Agent",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Inventory Campaign Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock User"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "agent_name",
+ "track_changes": 1
+}

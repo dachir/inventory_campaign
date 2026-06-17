@@ -1,0 +1,1047 @@
+# inventory_campaign/inventory_campaign/api/session.py
+
+"""
+Sprint 3 - Inventory Session submission API.
+
+The mobile app counts locally and submits a complete session only at closure.
+ERPNext creates the Inventory Session after validating the temporary mobile
+credential, the Inventory Agent scope, authorized items, and authorized
+locations.
+
+Important MVP rules enforced here:
+- mobile_session_id is the idempotency key;
+- only authorized/planned items become Inventory Session Item rows;
+- unplanned items/warehouses remain JSON evidence on Inventory Session;
+- optional recoding is stored as a proposal on Inventory Session Item;
+- the API never creates Item, Warehouse, Item Group, Famille, or Category master data;
+- the API returns a server ACK that the mobile may use before purging local data.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from typing import Any
+
+import frappe
+from frappe.utils import cint, flt, get_datetime, now_datetime
+
+
+SUBMIT_PROTOCOL = "inventory_campaign_session_submit_v1"
+ALLOWED_SESSION_STATUSES_FOR_IDEMPOTENT_ACK = {"Submitted", "Imported", "Rejected", "Cancelled", "Failed"}
+
+
+# -----------------------------------------------------------------------------
+# Generic helpers
+# -----------------------------------------------------------------------------
+
+
+def _safe_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    value = str(value).strip()
+    return value or None
+
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        if value in (None, ""):
+            return default
+        return int(value)
+    except Exception:
+        return default
+
+
+
+def _json_loads(value: Any) -> Any:
+    if value in (None, ""):
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str):
+        try:
+            return frappe.parse_json(value)
+        except Exception:
+            return json.loads(value)
+    return value
+
+
+
+def _json_dumps(data: Any) -> str:
+    return json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+
+def _iso_datetime(value: Any) -> str | None:
+    if not value:
+        return None
+    try:
+        return get_datetime(value).isoformat()
+    except Exception:
+        return str(value)
+
+
+
+def _as_list(value: Any) -> list[Any]:
+    value = _json_loads(value)
+    if value in (None, ""):
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        # Accept common wrapper shapes while keeping one-object payloads usable.
+        for key in ("items", "rows", "data", "values", "locations", "warehouses"):
+            inner = value.get(key)
+            if isinstance(inner, list):
+                return inner
+        return [value]
+    return []
+
+
+
+def _hash_payload(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(_json_dumps(payload).encode("utf-8")).hexdigest()
+
+
+
+def _sanitize_payload_for_storage(payload: dict[str, Any]) -> dict[str, Any]:
+    sanitized = dict(payload or {})
+    sanitized.pop("mobile_credential", None)
+    sanitized.pop("agent_token", None)
+    sanitized.pop("token", None)
+    sanitized["protocol"] = sanitized.get("protocol") or SUBMIT_PROTOCOL
+    return sanitized
+
+
+
+def _error(reason: str, **extra: Any) -> dict[str, Any]:
+    response = {
+        "ok": False,
+        "submitted": False,
+        "ack": False,
+        "reason": reason,
+    }
+    response.update(extra)
+    return response
+
+
+
+def _has_field(doctype: str, fieldname: str) -> bool:
+    try:
+        return bool(frappe.get_meta(doctype).has_field(fieldname))
+    except Exception:
+        return False
+
+
+def _get_meta_field(doctype: str, fieldname: str) -> Any | None:
+    try:
+        return frappe.get_meta(doctype).get_field(fieldname)
+    except Exception:
+        return None
+
+
+def _safe_warehouse_field_value(doctype: str, fieldname: str, value: Any) -> str | None:
+    """Return a value safe to assign to a Warehouse Link field.
+
+    During the mobile inventory session, the agent may enter a terrain location
+    such as "Rack 01" or "01AE05". In many existing doctypes,
+    location_warehouse is still a Link to Warehouse. Assigning a non-Warehouse
+    value would break insert with LinkValidationError. If the field is still a
+    Warehouse Link, keep only real Warehouse names. If the field has been
+    manually changed to Data, keep the terrain value.
+    """
+
+    value = _safe_str(value)
+    if not value:
+        return None
+
+    field = _get_meta_field(doctype, fieldname)
+    if field and field.fieldtype == "Link" and field.options == "Warehouse":
+        return value if frappe.db.exists("Warehouse", value) else None
+
+    return value
+
+
+def _warehouse_location_suffix(parent_warehouse: Any) -> str:
+    """Return the ERPNext company/site suffix from a Warehouse name.
+
+    ERPNext Warehouse names usually end with the company abbreviation, for
+    example ``All Warehouses - MCO`` or ``40AE05 - MCO``. The mobile user may
+    type only the terrain rayon code (``40AE05``). For item rows we need to
+    store the real ERPNext location warehouse, so we append the suffix from the
+    campaign warehouse before assigning ``Inventory Session Item.location_warehouse``.
+    """
+
+    text = _safe_str(parent_warehouse)
+    if " - " not in text:
+        return ""
+    suffix = text[text.rfind(" - "):]
+    return suffix if suffix.strip(" -") else ""
+
+
+def _with_warehouse_location_suffix(value: Any, parent_warehouse: Any) -> str:
+    """Append the parent warehouse suffix to a rayon/location value if needed."""
+
+    text = _safe_str(value)
+    if not text:
+        return ""
+
+    suffix = _warehouse_location_suffix(parent_warehouse)
+    if not suffix:
+        return text
+
+    if text.lower().endswith(suffix.lower()):
+        return text
+
+    # Also avoid doubling when the user entered only the suffix code without
+    # spaces, e.g. ``40AE05-MCO``. Keep the user input unchanged in that case.
+    compact_text = text.lower().replace(" ", "")
+    compact_suffix = suffix.lower().replace(" ", "")
+    if compact_text.endswith(compact_suffix):
+        return text
+
+    return f"{text}{suffix}"
+
+
+def _append_terrain_note(existing_notes: str | None, location_warehouse: str | None, zone: str | None) -> str | None:
+    parts = []
+    existing_notes = _safe_str(existing_notes)
+    if existing_notes:
+        parts.append(existing_notes)
+
+    details = []
+    if _safe_str(location_warehouse):
+        details.append(f"Location terrain: {_safe_str(location_warehouse)}")
+    if _safe_str(zone):
+        details.append(f"Zone/rayon: {_safe_str(zone)}")
+
+    if details:
+        parts.append(" | ".join(details))
+
+    return "\n".join(parts) if parts else None
+
+
+# -----------------------------------------------------------------------------
+# Scope/context helpers
+# -----------------------------------------------------------------------------
+
+
+def _verify_mobile_credential(
+    mobile_credential: str | None,
+    campaign: str | None = None,
+    device_id: str | None = None,
+) -> dict[str, Any]:
+    try:
+        from inventory_campaign.api.agent import verify_mobile_credential_payload
+
+        return verify_mobile_credential_payload(
+            mobile_credential=mobile_credential,
+            expected_campaign=campaign,
+            expected_device_id=device_id,
+        )
+    except Exception:
+        frappe.log_error(
+            title="Inventory Campaign - verify_mobile_credential_failed",
+            message=frappe.get_traceback(),
+        )
+        return {
+            "valid": False,
+            "reason": "Mobile credential validation failed because of a server error",
+            "payload": None,
+        }
+
+
+
+def _get_mobile_context(
+    mobile_credential: str,
+    campaign: str,
+    device_id: str | None = None,
+) -> dict[str, Any]:
+    try:
+        from inventory_campaign.api.agent import get_inventory_context
+
+        return get_inventory_context(
+            mobile_credential=mobile_credential,
+            campaign=campaign,
+            device_id=device_id,
+        )
+    except Exception:
+        frappe.log_error(
+            title="Inventory Campaign - get_inventory_context_failed",
+            message=frappe.get_traceback(),
+        )
+        return {
+            "ok": False,
+            "valid": False,
+            "access_allowed": False,
+            "reason": "Inventory context loading failed because of a server error",
+        }
+
+
+
+def _authorized_item_codes(context: dict[str, Any]) -> set[str]:
+    # Legacy helper kept for backward compatibility. The current mobile flow no
+    # longer downloads authorized_items; authorization is by Item.item_group.
+    result: set[str] = set()
+    for row in context.get("authorized_items") or []:
+        code = _safe_str(row.get("item_code"))
+        if code:
+            result.add(code)
+    return result
+
+
+def _authorized_item_group_codes(context: dict[str, Any]) -> set[str]:
+    result: set[str] = set()
+    for row in context.get("authorized_item_groups") or []:
+        group = _safe_str(row.get("item_group") or row.get("name") or row.get("code"))
+        if group:
+            result.add(group)
+    return result
+
+
+
+def _authorized_location_codes(context: dict[str, Any]) -> set[str]:
+    result: set[str] = set()
+    for row in context.get("authorized_locations") or []:
+        location = _safe_str(row.get("location_warehouse"))
+        if location:
+            result.add(location)
+    return result
+
+
+
+def _campaign_from_context(context: dict[str, Any], campaign: str) -> dict[str, Any] | None:
+    selected = context.get("selected_campaign") or {}
+    if selected.get("name") == campaign:
+        return selected
+
+    for row in context.get("available_campaigns") or []:
+        if row.get("name") == campaign:
+            return row
+    return None
+
+
+
+def _get_campaign_doc(campaign: str) -> Any | None:
+    if not campaign or not frappe.db.exists("Inventory Campaign", campaign):
+        return None
+    return frappe.get_doc("Inventory Campaign", campaign)
+
+
+
+def _get_item_doc(item_code: str) -> Any | None:
+    if not item_code:
+        return None
+    if not frappe.db.exists("Item", item_code):
+        return None
+    return frappe.get_doc("Item", item_code)
+
+
+
+def _warehouse_parent(warehouse: str | None) -> str | None:
+    warehouse = _safe_str(warehouse)
+    if not warehouse:
+        return None
+    return frappe.db.get_value("Warehouse", warehouse, "parent_warehouse")
+
+
+# -----------------------------------------------------------------------------
+# Recoding helpers
+# -----------------------------------------------------------------------------
+
+
+def _normalize_recoding_tags(tags: Any) -> dict[str, Any]:
+    try:
+        from inventory_campaign.api.recoding import normalize_recoding_tags_value
+
+        return normalize_recoding_tags_value(tags)
+    except Exception:
+        frappe.log_error(
+            title="Inventory Campaign - normalize_recoding_tags_failed",
+            message=frappe.get_traceback(),
+        )
+        return {
+            "ok": False,
+            "valid": False,
+            "reason": "Recoding tags validation failed because of a server error",
+        }
+
+
+
+def _extract_item_recoding_tags(row: dict[str, Any]) -> Any:
+    for key in ("recoding_tags_json", "recoding_tags", "recoding", "recoding_proposal"):
+        if key in row and row.get(key) not in (None, ""):
+            return row.get(key)
+    return None
+
+
+# -----------------------------------------------------------------------------
+# Payload normalization / validation
+# -----------------------------------------------------------------------------
+
+
+def _coerce_payload(payload: Any = None, kwargs: dict[str, Any] | None = None) -> dict[str, Any]:
+    kwargs = dict(kwargs or {})
+
+    if payload not in (None, ""):
+        parsed = _json_loads(payload)
+        if not isinstance(parsed, dict):
+            raise ValueError("payload must be a JSON object")
+        merged = dict(parsed)
+        # Explicit kwargs win over nested payload only when they are meaningful.
+        for key, value in kwargs.items():
+            if value not in (None, ""):
+                merged[key] = value
+        return merged
+
+    return kwargs
+
+
+
+def _normalize_unplanned_payload(value: Any) -> list[Any]:
+    rows = _as_list(value)
+    # Keep unplanned data as evidence. We only ensure it is JSON-serializable.
+    normalized = []
+    for row in rows:
+        if isinstance(row, dict):
+            normalized.append(row)
+        else:
+            normalized.append({"value": row})
+    return normalized
+
+
+
+def _normalize_locations(
+    payload: dict[str, Any],
+    parent_warehouse: str,
+    primary_location: str | None,
+    authorized_locations: set[str] | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Normalize optional session locations.
+
+    Warehouse/location selection is now done at session opening by the agent.
+    It is not part of the Inventory Agent access scope anymore. Therefore this
+    function must not reject a session because the location is absent from
+    authorized_locations.
+
+    If location_warehouse is still a Link to Warehouse in the DocType and the
+    agent entered a free terrain value (Rack, rayon, comment), we skip the child
+    location row to avoid LinkValidationError. The raw value remains preserved in
+    raw_payload_json and in Inventory Session.notes.
+    """
+
+    errors: list[dict[str, Any]] = []
+    locations: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add_location(raw_location: str | None, raw_parent: str | None = None, notes: str | None = None) -> None:
+        location = _safe_str(raw_location)
+        if not location or location in seen:
+            return
+
+        safe_location = _safe_warehouse_field_value("Inventory Session Location", "location_warehouse", location)
+        if not safe_location:
+            # Free terrain location while child field is still Link/Warehouse.
+            # Keep it only in session header notes/raw_payload.
+            return
+
+        row_parent = _safe_str(raw_parent) or parent_warehouse or _warehouse_parent(safe_location)
+        safe_parent = _safe_warehouse_field_value("Inventory Session Location", "parent_warehouse", row_parent)
+        seen.add(location)
+        locations.append({
+            "parent_warehouse": safe_parent,
+            "location_warehouse": safe_location,
+            "location_name": frappe.db.get_value("Warehouse", safe_location, "warehouse_name") if frappe.db.exists("Warehouse", safe_location) else safe_location,
+            "notes": _safe_str(notes),
+        })
+
+    for row in _as_list(payload.get("locations")):
+        if not isinstance(row, dict):
+            errors.append({"check": "locations", "reason": "Location row must be a JSON object", "row": row})
+            continue
+
+        add_location(
+            raw_location=row.get("location_warehouse") or row.get("warehouse") or row.get("location"),
+            raw_parent=row.get("parent_warehouse"),
+            notes=row.get("notes"),
+        )
+
+    add_location(primary_location, parent_warehouse)
+
+    return locations, errors
+
+
+def _normalize_items(
+    payload: dict[str, Any],
+    parent_warehouse: str,
+    primary_location: str | None,
+    authorized_items: set[str],
+    authorized_item_groups: set[str],
+    authorized_locations: set[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int, float, int]:
+    errors: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
+    normalized_rows: list[dict[str, Any]] = []
+    total_qty = 0.0
+    recoding_count = 0
+
+    for index, raw_row in enumerate(_as_list(payload.get("items")), start=1):
+        if not isinstance(raw_row, dict):
+            errors.append({"check": "items", "row_index": index, "reason": "Item row must be a JSON object", "row": raw_row})
+            continue
+
+        item_code = _safe_str(raw_row.get("item_code") or raw_row.get("item"))
+        if not item_code:
+            errors.append({"check": "items", "row_index": index, "reason": "Item row is missing item_code"})
+            continue
+
+        item_doc = _get_item_doc(item_code)
+        if not item_doc:
+            errors.append({
+                "check": "items",
+                "row_index": index,
+                "reason": "Item does not exist in ERPNext; submit it under unplanned_items instead.",
+                "item_code": item_code,
+            })
+            continue
+
+        if item_doc.disabled:
+            errors.append({
+                "check": "items",
+                "row_index": index,
+                "reason": "Item is disabled in ERPNext.",
+                "item_code": item_code,
+            })
+            continue
+
+        if hasattr(item_doc, "is_stock_item") and not cint(item_doc.is_stock_item):
+            errors.append({
+                "check": "items",
+                "row_index": index,
+                "reason": "Item is not a stock item.",
+                "item_code": item_code,
+            })
+            continue
+
+        if authorized_item_groups and item_doc.item_group not in authorized_item_groups:
+            errors.append({
+                "check": "items",
+                "row_index": index,
+                "reason": "Item Group is not authorized for this Inventory Agent.",
+                "item_code": item_code,
+                "item_group": item_doc.item_group,
+            })
+            continue
+
+        # Backward compatibility: if a legacy context still carries explicit
+        # authorized_items and no item-group scope, accept only those items.
+        if not authorized_item_groups and authorized_items and item_code not in authorized_items:
+            errors.append({
+                "check": "items",
+                "row_index": index,
+                "reason": "Item is not authorized for this Inventory Agent.",
+                "item_code": item_code,
+            })
+            continue
+
+        try:
+            counted_qty = flt(raw_row.get("counted_qty"))
+        except Exception:
+            counted_qty = 0.0
+
+        if counted_qty < 0:
+            errors.append({
+                "check": "items",
+                "row_index": index,
+                "reason": "counted_qty cannot be negative.",
+                "item_code": item_code,
+                "counted_qty": counted_qty,
+            })
+            continue
+
+        raw_row_parent = _safe_str(raw_row.get("parent_warehouse")) or parent_warehouse
+        raw_row_rayon = _safe_str(raw_row.get("rayon") or raw_row.get("zone"))
+        row_rayon = _with_warehouse_location_suffix(raw_row_rayon, raw_row_parent)
+
+        # The item-level rayon is the real terrain location for the counted line.
+        # It must be written to Inventory Session Item.location_warehouse. Older
+        # mobile payloads may still send only ``rayon`` or ``zone``; newer ones
+        # also send the same value as ``location_warehouse``.
+        explicit_row_location = _safe_str(raw_row.get("location_warehouse"))
+        explicit_row_location = _with_warehouse_location_suffix(explicit_row_location, raw_row_parent)
+        fallback_location = _safe_str(raw_row.get("warehouse") or raw_row.get("location"))
+        fallback_location = _with_warehouse_location_suffix(fallback_location, raw_row_parent)
+
+        row_location = explicit_row_location or row_rayon or fallback_location or primary_location
+        row_parent = raw_row_parent or _warehouse_parent(row_location)
+
+        # Location/warehouse is a session-level terrain choice now. It is not
+        # validated against Inventory Agent.authorized_locations. If the child
+        # field is still a Warehouse Link and the mobile sent a terrain value,
+        # keep the value in raw_payload_json/session notes and avoid assigning it
+        # to the Link field. When the suffixed rayon exists as a Warehouse, it is
+        # stored normally in Inventory Session Item.location_warehouse.
+        safe_row_parent = _safe_warehouse_field_value("Inventory Session Item", "parent_warehouse", row_parent)
+        safe_row_location = _safe_warehouse_field_value("Inventory Session Item", "location_warehouse", row_location)
+
+        recoding_tags = _extract_item_recoding_tags(raw_row)
+        recoding = _normalize_recoding_tags(recoding_tags)
+        if not recoding.get("valid"):
+            errors.append({
+                "check": "recoding",
+                "row_index": index,
+                "item_code": item_code,
+                "reason": recoding.get("reason") or "Invalid recoding_tags_json.",
+            })
+            continue
+
+        recoding_required = bool(recoding.get("recoding_required"))
+        if recoding_required:
+            recoding_count += 1
+
+        summary = recoding.get("summary") or {}
+        total_qty += counted_qty
+
+        normalized_rows.append({
+            "item_code": item_doc.name,
+            "item_name": _safe_str(raw_row.get("item_name")) or item_doc.item_name,
+            "barcode": _safe_str(raw_row.get("barcode") or raw_row.get("scan_code")),
+            "uom": _safe_str(raw_row.get("uom")) or item_doc.stock_uom,
+            "counted_qty": counted_qty,
+            "scan_count": _safe_int(raw_row.get("scan_count"), 1),
+            "last_scanned_at": raw_row.get("last_scanned_at"),
+            "manual_entry": cint(raw_row.get("manual_entry") or 0),
+            "parent_warehouse": safe_row_parent,
+            "location_warehouse": safe_row_location,
+            "rayon": row_rayon,
+            "zone": row_rayon,
+            "mobile_line_id": _safe_str(raw_row.get("mobile_line_id") or raw_row.get("line_id")),
+            "recoding_required": 1 if recoding_required else 0,
+            "recoding_status": recoding.get("recoding_status") or ("Pending Review" if recoding_required else "Not Required"),
+            "recoding_tags_json": recoding.get("recoding_tags_json") if recoding_required else "{}",
+            "recoding_famille_code": summary.get("famille_code"),
+            "recoding_famille_description": summary.get("famille_description"),
+            "recoding_sous_famille_code": summary.get("sous_famille_code"),
+            "recoding_sous_famille_description": summary.get("sous_famille_description"),
+            "recoding_caracteristique_majeure_code": summary.get("caracteristique_majeure_code"),
+            "recoding_caracteristique_majeure": summary.get("caracteristique_majeure"),
+            "recoding_note": _safe_str(raw_row.get("recoding_note")),
+            "notes": _safe_str(raw_row.get("notes")),
+        })
+
+        if item_doc.disabled:
+            warnings.append({
+                "check": "items",
+                "row_index": index,
+                "item_code": item_doc.name,
+                "reason": "Item is disabled in ERPNext but was accepted because it is in the authorized_items scope.",
+            })
+
+    return normalized_rows, errors, len(normalized_rows), total_qty, recoding_count
+
+
+# -----------------------------------------------------------------------------
+# Persistence helpers
+# -----------------------------------------------------------------------------
+
+
+def _find_existing_session(mobile_session_id: str) -> dict[str, Any] | None:
+    if not mobile_session_id:
+        return None
+
+    fields = ["name", "status", "campaign", "inventory_agent", "server_ack_at"]
+    if _has_field("Inventory Session", "submit_payload_hash"):
+        fields.insert(4, "submit_payload_hash")
+
+    return frappe.db.get_value(
+        "Inventory Session",
+        {"mobile_session_id": mobile_session_id},
+        fields,
+        as_dict=True,
+    )
+
+
+
+def _touch_existing_session_retry(existing_name: str) -> None:
+    try:
+        current_retry_count = _safe_int(frappe.db.get_value("Inventory Session", existing_name, "submit_retry_count"), 0)
+        frappe.db.set_value(
+            "Inventory Session",
+            existing_name,
+            {
+                "submit_retry_count": current_retry_count + 1,
+                "server_ack_at": now_datetime(),
+            },
+            update_modified=False,
+        )
+        frappe.db.commit()
+    except Exception:
+        # Idempotent ACK must not fail only because retry metadata could not be updated.
+        frappe.log_error(
+            title="Inventory Campaign - existing_session_retry_touch_failed",
+            message=frappe.get_traceback(),
+        )
+
+
+
+def _refresh_campaign_summary(campaign: str) -> None:
+    if not campaign or not frappe.db.exists("Inventory Campaign", campaign):
+        return
+
+    try:
+        sessions = frappe.get_all(
+            "Inventory Session",
+            filters={"campaign": campaign},
+            fields=[
+                "name",
+                "status",
+                "total_items_counted",
+                "unplanned_items_count",
+                "unplanned_warehouses_count",
+            ],
+        )
+
+        total_sessions = len(sessions)
+        total_items_counted = sum(_safe_int(row.get("total_items_counted"), 0) for row in sessions)
+        total_unplanned_items = sum(_safe_int(row.get("unplanned_items_count"), 0) for row in sessions)
+        total_unplanned_warehouses = sum(_safe_int(row.get("unplanned_warehouses_count"), 0) for row in sessions)
+
+        frappe.db.set_value(
+            "Inventory Campaign",
+            campaign,
+            {
+                "total_sessions": total_sessions,
+                "total_items_counted": total_items_counted,
+                "total_unplanned_items": total_unplanned_items,
+                "total_unplanned_warehouses": total_unplanned_warehouses,
+            },
+            update_modified=False,
+        )
+    except Exception:
+        frappe.log_error(
+            title="Inventory Campaign - campaign_summary_refresh_failed",
+            message=frappe.get_traceback(),
+        )
+
+
+
+def _create_inventory_session_doc(
+    payload: dict[str, Any],
+    sanitized_payload: dict[str, Any],
+    payload_hash: str,
+    context: dict[str, Any],
+    campaign_doc: Any,
+    normalized_locations: list[dict[str, Any]],
+    normalized_items: list[dict[str, Any]],
+    unplanned_items: list[Any],
+    unplanned_warehouses: list[Any],
+    total_items_counted: int,
+    total_qty_counted: float,
+    recoding_proposals_count: int,
+) -> Any:
+    credential_payload = context.get("mobile_credential_payload") or {}
+    agent_ctx = context.get("inventory_agent") or {}
+
+    mobile_session_id = _safe_str(payload.get("mobile_session_id"))
+    parent_warehouse = _safe_str(payload.get("parent_warehouse")) or campaign_doc.warehouse
+    location_warehouse = _safe_str(payload.get("location_warehouse"))
+    zone = _safe_str(payload.get("zone"))
+    device_id = _safe_str(payload.get("device_id")) or _safe_str(credential_payload.get("device_id"))
+
+    safe_parent_warehouse = _safe_warehouse_field_value("Inventory Session", "parent_warehouse", parent_warehouse)
+    safe_warehouse = _safe_warehouse_field_value("Inventory Session", "warehouse", parent_warehouse)
+    safe_location_warehouse = _safe_warehouse_field_value("Inventory Session", "location_warehouse", location_warehouse)
+    session_notes = _append_terrain_note(_safe_str(payload.get("notes")), location_warehouse, zone)
+
+    doc_data = {
+        "doctype": "Inventory Session",
+        "campaign": campaign_doc.name,
+        "mobile_session_id": mobile_session_id,
+        "status": "Submitted",
+        "inventory_agent": agent_ctx.get("name") or credential_payload.get("inventory_agent"),
+        "operator_user": _safe_str(payload.get("operator_user")),
+        "operator_name": _safe_str(payload.get("operator_name")) or agent_ctx.get("agent_name"),
+        "device_id": device_id,
+        "company": campaign_doc.company,
+        "warehouse": safe_warehouse,
+        "parent_warehouse": safe_parent_warehouse,
+        "location_warehouse": safe_location_warehouse,
+        "zone": zone,
+        "item_group": _safe_str(payload.get("item_group")),
+        "opened_at": payload.get("opened_at"),
+        "closed_at": payload.get("closed_at"),
+        "submitted_at": payload.get("submitted_at") or now_datetime(),
+        "server_ack_at": now_datetime(),
+        "submitted_from_mobile": 1,
+        "submit_retry_count": _safe_int(payload.get("submit_retry_count"), 0),
+        "unplanned_items_json": _json_dumps(unplanned_items),
+        "unplanned_warehouses_json": _json_dumps(unplanned_warehouses),
+        "has_unplanned_items": 1 if unplanned_items else 0,
+        "unplanned_items_count": len(unplanned_items),
+        "has_unplanned_warehouses": 1 if unplanned_warehouses else 0,
+        "unplanned_warehouses_count": len(unplanned_warehouses),
+        "has_recoding_proposals": 1 if recoding_proposals_count else 0,
+        "recoding_proposals_count": recoding_proposals_count,
+        "review_status": "Pending",
+        "total_items_counted": total_items_counted,
+        "total_qty_counted": total_qty_counted,
+        "raw_payload_json": _json_dumps(sanitized_payload),
+        "notes": session_notes,
+    }
+
+    if _has_field("Inventory Session", "branch"):
+        doc_data["branch"] = _safe_str(payload.get("branch")) or _safe_str(payload.get("site"))
+
+    if _has_field("Inventory Session", "submit_payload_hash"):
+        doc_data["submit_payload_hash"] = payload_hash
+
+    doc = frappe.get_doc(doc_data)
+
+    for location_row in normalized_locations:
+        doc.append("locations", location_row)
+
+    for item_row in normalized_items:
+        doc.append("items", item_row)
+
+    doc.insert(ignore_permissions=True)
+    return doc
+
+
+# -----------------------------------------------------------------------------
+# Public API
+# -----------------------------------------------------------------------------
+
+
+@frappe.whitelist(allow_guest=True)
+def submit_inventory_session(
+    mobile_credential: str | None = None,
+    payload: Any = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """
+    Submit a closed mobile inventory session to ERPNext.
+
+    The API is deliberately idempotent. If the same mobile_session_id is sent
+    again with the same payload hash, the existing Inventory Session is returned
+    as a duplicate ACK and the mobile may still purge its local data.
+    """
+
+    try:
+        incoming_payload = _coerce_payload(payload=payload, kwargs=kwargs)
+    except Exception as exc:
+        return _error(str(exc))
+
+    mobile_credential = _safe_str(mobile_credential) or _safe_str(incoming_payload.get("mobile_credential"))
+    campaign = _safe_str(incoming_payload.get("campaign"))
+    mobile_session_id = _safe_str(incoming_payload.get("mobile_session_id"))
+    device_id = _safe_str(incoming_payload.get("device_id"))
+
+    if not mobile_session_id:
+        return _error("mobile_session_id is required.")
+
+    if not campaign:
+        return _error("campaign is required.")
+
+    if not mobile_credential:
+        return _error("mobile_credential is required.")
+
+    sanitized_payload = _sanitize_payload_for_storage(incoming_payload)
+    payload_hash = _hash_payload(sanitized_payload)
+
+    existing = _find_existing_session(mobile_session_id)
+    if existing:
+        existing_hash = _safe_str(existing.get("submit_payload_hash"))
+        if existing_hash and existing_hash != payload_hash:
+            return _error(
+                "mobile_session_id already exists with a different payload hash.",
+                conflict=True,
+                duplicate=True,
+                mobile_session_id=mobile_session_id,
+                existing_inventory_session=existing.get("name"),
+                existing_status=existing.get("status"),
+            )
+
+        _touch_existing_session_retry(existing.get("name"))
+        return {
+            "ok": True,
+            "submitted": True,
+            "ack": True,
+            "duplicate": True,
+            "idempotent_ack": True,
+            "reason": "Inventory Session was already submitted. Existing session returned.",
+            "inventory_session": existing.get("name"),
+            "status": existing.get("status"),
+            "campaign": existing.get("campaign"),
+            "inventory_agent": existing.get("inventory_agent"),
+            "mobile_session_id": mobile_session_id,
+            "server_ack_at": _iso_datetime(now_datetime()),
+            "mobile_can_purge": True,
+        }
+
+    verification = _verify_mobile_credential(
+        mobile_credential=mobile_credential,
+        campaign=campaign,
+        device_id=device_id,
+    )
+    if not verification.get("valid"):
+        return _error(verification.get("reason") or "Mobile credential is invalid.", valid=False)
+
+    context = _get_mobile_context(
+        mobile_credential=mobile_credential,
+        campaign=campaign,
+        device_id=device_id,
+    )
+    if not context.get("ok") or not context.get("access_allowed"):
+        return _error(context.get("reason") or "Inventory Agent context is not allowed.", valid=False)
+
+    campaign_context = _campaign_from_context(context, campaign)
+
+    campaign_doc = _get_campaign_doc(campaign)
+    if not campaign_doc:
+        return _error("Inventory Campaign does not exist.", campaign=campaign)
+
+    if campaign_doc.status not in {"Draft", "Open"}:
+        return _error("Inventory Campaign must be Draft or Open to accept mobile submissions.", campaign=campaign, status=campaign_doc.status)
+
+    agent_ctx = context.get("inventory_agent") or {}
+    agent_company = _safe_str(agent_ctx.get("company"))
+    if agent_company and campaign_doc.company != agent_company:
+        return _error(
+            "Inventory Campaign company does not match the Inventory Agent company.",
+            campaign=campaign,
+            campaign_company=campaign_doc.company,
+            agent_company=agent_company,
+        )
+
+    incoming_branch = _safe_str(incoming_payload.get("branch")) or _safe_str(incoming_payload.get("site"))
+    campaign_branch = _safe_str(getattr(campaign_doc, "branch", None)) if _has_field("Inventory Campaign", "branch") else None
+    if incoming_branch and campaign_branch and incoming_branch != campaign_branch:
+        return _error(
+            "Inventory Campaign branch does not match the selected mobile branch.",
+            campaign=campaign,
+            campaign_branch=campaign_branch,
+            selected_branch=incoming_branch,
+        )
+
+    authorized_items = _authorized_item_codes(context)
+    authorized_item_groups = _authorized_item_group_codes(context)
+    authorized_locations = _authorized_location_codes(context)
+
+    if not authorized_item_groups and not authorized_items:
+        return _error("Inventory Agent has no Authorized Item Groups.")
+
+    parent_warehouse = _safe_str(incoming_payload.get("parent_warehouse")) or campaign_doc.warehouse
+    if parent_warehouse != campaign_doc.warehouse:
+        return _error(
+            "parent_warehouse must match the Inventory Campaign warehouse.",
+            parent_warehouse=parent_warehouse,
+            campaign_warehouse=campaign_doc.warehouse,
+        )
+
+    primary_location = _safe_str(incoming_payload.get("location_warehouse"))
+    normalized_locations, location_errors = _normalize_locations(
+        payload=incoming_payload,
+        parent_warehouse=parent_warehouse,
+        primary_location=primary_location,
+        authorized_locations=authorized_locations,
+    )
+
+    normalized_items, item_errors, total_items_counted, total_qty_counted, recoding_proposals_count = _normalize_items(
+        payload=incoming_payload,
+        parent_warehouse=parent_warehouse,
+        primary_location=primary_location,
+        authorized_items=authorized_items,
+        authorized_item_groups=authorized_item_groups,
+        authorized_locations=authorized_locations,
+    )
+
+    unplanned_items = _normalize_unplanned_payload(
+        incoming_payload.get("unplanned_items")
+        if "unplanned_items" in incoming_payload
+        else incoming_payload.get("unplanned_items_json")
+    )
+    unplanned_warehouses = _normalize_unplanned_payload(
+        incoming_payload.get("unplanned_warehouses")
+        if "unplanned_warehouses" in incoming_payload
+        else incoming_payload.get("unplanned_warehouses_json")
+    )
+
+    errors = location_errors + item_errors
+    if errors:
+        return _error("Inventory Session payload validation failed.", errors=errors)
+
+    if not normalized_items and not unplanned_items and not unplanned_warehouses:
+        return _error("Inventory Session must contain at least one counted item or one unplanned field discovery.")
+
+    try:
+        doc = _create_inventory_session_doc(
+            payload=incoming_payload,
+            sanitized_payload=sanitized_payload,
+            payload_hash=payload_hash,
+            context=context,
+            campaign_doc=campaign_doc,
+            normalized_locations=normalized_locations,
+            normalized_items=normalized_items,
+            unplanned_items=unplanned_items,
+            unplanned_warehouses=unplanned_warehouses,
+            total_items_counted=total_items_counted,
+            total_qty_counted=total_qty_counted,
+            recoding_proposals_count=recoding_proposals_count,
+        )
+        _refresh_campaign_summary(campaign_doc.name)
+        frappe.db.commit()
+    except Exception as exc:
+        # Duplicate race: another request may have inserted the same unique
+        # mobile_session_id after our initial lookup.
+        existing_after_error = _find_existing_session(mobile_session_id)
+        if existing_after_error:
+            frappe.db.rollback()
+            _touch_existing_session_retry(existing_after_error.get("name"))
+            return {
+                "ok": True,
+                "submitted": True,
+                "ack": True,
+                "duplicate": True,
+                "idempotent_ack": True,
+                "reason": "Inventory Session was already submitted during retry. Existing session returned.",
+                "inventory_session": existing_after_error.get("name"),
+                "status": existing_after_error.get("status"),
+                "campaign": existing_after_error.get("campaign"),
+                "inventory_agent": existing_after_error.get("inventory_agent"),
+                "mobile_session_id": mobile_session_id,
+                "server_ack_at": _iso_datetime(now_datetime()),
+                "mobile_can_purge": True,
+            }
+
+        frappe.db.rollback()
+        frappe.log_error(
+            title="Inventory Campaign - submit_inventory_session_failed",
+            message=frappe.get_traceback(),
+        )
+        return _error(
+            "Inventory Session could not be created because of a server error.",
+            exception=str(exc),
+            mobile_can_purge=False,
+        )
+
+    return {
+        "ok": True,
+        "submitted": True,
+        "ack": True,
+        "duplicate": False,
+        "idempotent_ack": False,
+        "inventory_session": doc.name,
+        "status": doc.status,
+        "campaign": campaign_doc.name,
+        "inventory_agent": doc.inventory_agent,
+        "mobile_session_id": mobile_session_id,
+        "server_ack_at": _iso_datetime(doc.server_ack_at),
+        "total_items_counted": total_items_counted,
+        "total_qty_counted": total_qty_counted,
+        "unplanned_items_count": len(unplanned_items),
+        "unplanned_warehouses_count": len(unplanned_warehouses),
+        "recoding_proposals_count": recoding_proposals_count,
+        "mobile_can_purge": True,
+        "next_step": "purge_mobile_local_data",
+    }

@@ -1,0 +1,115 @@
+code,description,unite,value_type,valeurs_possibles,raw_units,unit_resolution_note
+ALIM,Alimentation,,Text,,Volt,"Unité source Volt absente de UOM.xlsx, laissée vide."
+AMO,Amortissement,,Text,,,
+APP,Application,,Text,,,
+BLI,Blindage,,Text,,,
+CAL,Calibre,AMP,Decimal,,A,Unité source A mappée vers UOM existante AMP.
+CAP,Capacité,,Text,,L / kg,"Unité source L / kg ambiguë/composite, laissée vide."
+CCU,Capacité cuve,L,Text,,L,Unité source L mappée vers UOM existante L.
+CDP,Calibre de protection,AMP,Text,,A,Unité source A mappée vers UOM existante AMP.
+CLR,Couleur,,Text,,,
+CLS,Classe,,Text,,,
+CND,Conditionnement,,Text,,L / kg; Nos,"Unité laissée vide car CND a plusieurs unités terrain (Nos, L/kg)."
+COM,Interface communication,,Text,,,
+CONS,Constructeur,,Text,,,
+COU,Course,Millimeter,Decimal,,mm,Unité source mm mappée vers UOM existante Millimeter.
+CPS,Capteurs sécurité,,Text,,,
+CRT,Courant,AMP,Text,,A,Unité source A mappée vers UOM existante AMP.
+CTA,Couleur ou type d'alerte,,Text,,,
+CYL,Cylindrée,,Text,,cm³/tr,"Unité source cm³/tr absente de UOM.xlsx, laissée vide."
+DAP,Diamètre alésage / piston,Millimeter,Decimal,,mm,Unité source mm mappée vers UOM existante Millimeter.
+DDR,Diamètre de raccordement,,Text,,mm / filetage,"Unité source mm / filetage ambiguë/composite, laissée vide."
+DEB,Débit,,Decimal,,L/min,"Unité source L/min absente de UOM.xlsx, laissée vide."
+DET,Diamètre extérieur du tube,Millimeter,Decimal,,mm,Unité source mm mappée vers UOM existante Millimeter.
+DGA,Diamètre gaine,Millimeter,Decimal,,mm,Unité source mm mappée vers UOM existante Millimeter.
+DGT,Diamètre tige,Millimeter,Decimal,,mm,Unité source mm mappée vers UOM existante Millimeter.
+DIA,Diamètre,Millimeter,Decimal,,mm,Unité source mm mappée vers UOM existante Millimeter.
+DIAE,Diamètre extérieur,Millimeter,Decimal,,mm,Unité source mm mappée vers UOM existante Millimeter.
+DIAI,Diamètre intérieur / alésage,Millimeter,Decimal,,mm,Unité source mm mappée vers UOM existante Millimeter.
+DIM,Dimensions,Millimeter,Text,,mm,Unité source mm mappée vers UOM existante Millimeter.
+DN,Diamètre nominal,,Decimal,,DN,"Unité source DN absente de UOM.xlsx, laissée vide."
+DNR,DN / raccordement,,Text,,,
+DTC,Débit max ou tension commande,,Decimal,,L/min ou Volt,"Unité source L/min ou Volt ambiguë/composite, laissée vide."
+DTF,Diamètre tube ou filetage,,Text,,mm / filetage,"Unité source mm / filetage ambiguë/composite, laissée vide."
+DXI,Diamètre extérieur x intérieur,Millimeter,Decimal,,mm,Unité source mm mappée vers UOM existante Millimeter.
+EMB,Embouts,,Text,,,
+EPJ,Épaisseur / protection-jeu,,Text,,mm / sans unité,"Unité source mm / sans unité ambiguë/composite, laissée vide."
+FAB,Fabricant,,Text,,,
+FIL,Filetage,,Text,,,
+FIX,Fixation,,Text,,,
+FON,Fonction,,Text,,,
+FOR,Forme / format,,Text,,,
+FRM,Forme,,Text,,,
+FTT,Forme de la tête,,Text,,,
+GRA,Grade / viscosité,,Text,,,
+ICM,Intensité de coupure max,AMP,Decimal,,A,Unité source A mappée vers UOM existante AMP.
+LEP,Largeur / épaisseur,Millimeter,Decimal,,mm,Unité source mm mappée vers UOM existante Millimeter.
+LGA,Longueur gaine,Millimeter,Decimal,,mm,Unité source mm mappée vers UOM existante Millimeter.
+LIQ,Type de liquide,,Text,,,
+LON,Longueur,Millimeter,Decimal,,mm,Unité source mm mappée vers UOM existante Millimeter.
+LPR,Longueur primitive,Millimeter,Decimal,,mm,Unité source mm mappée vers UOM existante Millimeter.
+MAF,Matériau / fonction,,Text,,,
+MAT,Matière,,Text,,,
+MDS,Mode de signal,,Text,,,
+MOD,Mode,,Text,,,
+MODU,Module,,Text,,,
+NBC,Nbr contacts,Nos,Text,,Nos,Unité source Nos mappée vers UOM existante Nos.
+NBCD,Nbr conducteurs,Nos,Number,,Nos,Unité source Nos mappée vers UOM existante Nos.
+NBM,Nbr maillons,Nos,Number,,Nos,Unité source Nos mappée vers UOM existante Nos.
+NBP,Nbr Pôles,Nos,Number,,Nos,Unité source Nos mappée vers UOM existante Nos.
+NBV,Nbr voies,Nos,Number,,Nos,Unité source Nos mappée vers UOM existante Nos.
+NDR,Nombre de dents / rapport,,Number,,Nos / ratio,"Unité source Nos / ratio ambiguë/composite, laissée vide."
+NES,Nombre d'entrées/sorties,Nos,Number,,Nos,Unité source Nos mappée vers UOM existante Nos.
+NOR,Norme,,Text,,,
+NPR,Niveau de protection,,Text,,,
+NUA,Nuance,,Text,,,
+OPT,Options,,Text,,,
+PAC,Puissance acoustique,,Decimal,,dB,"Unité source dB absente de UOM.xlsx, laissée vide."
+PAS,Pas de la chaîne,Millimeter,Text,,mm,Unité source mm mappée vers UOM existante Millimeter.
+PDE,Pas / denture,,Text,,,
+PDM,Plage de débit maximale,,Decimal,,m³/h,"Unité source m³/h absente de UOM.xlsx, laissée vide."
+PEN,Puissance électrique nominale,Watt,Decimal,,W,Unité source W mappée vers UOM existante Watt.
+PLG,Portée / plage,,Text,,,
+PMD,Puissance moteur ou débit,,Decimal,,kW ou L/min,"Unité source kW ou L/min ambiguë/composite, laissée vide."
+PME,Pression maximale de l'échelle,Bar,Decimal,,bar,Unité source bar mappée vers UOM existante Bar.
+PMEAS,Plage de mesure,Celsius,Text,,°C,Unité source °C mappée vers UOM existante Celsius.
+PMM,Puissance moteur max supportée,Kilowatt,Decimal,,kW,Unité source kW mappée vers UOM existante Kilowatt.
+PPM,Plage de pression maximale,Bar,Decimal,,bar,Unité source bar mappée vers UOM existante Bar.
+PRC,Procédé,,Text,,,
+PRE,Pression max,Bar,Decimal,,bar,Unité source bar mappée vers UOM existante Bar.
+PUI,Puissance nominale,Kilowatt,Decimal,,kW,Unité source kW mappée vers UOM existante Kilowatt.
+RAC,Raccordement,,Text,,,
+REF,Référence modèle,,Text,,,
+REFERENC,Référence,,Text,,,
+RES,Résistance,,Text,,,
+RET,Résolution / type,,Text,,,
+SEC,Section des conducteurs,,Text,,mm²,"Unité source mm² absente de UOM.xlsx, laissée vide."
+SER,Série / modèle,,Text,,,
+SEU,Seuil de filtration,Micrometer,Text,,µm,Unité source µm mappée vers UOM existante Micrometer.
+SIG,Signal de sortie,,Text,,,
+SOR,Sortie,,Text,,,
+SR,Série / référence,,Text,,,
+STD,Standard / matière,,Text,,,
+TAI,Taille,,Text,,,
+TAL,Type alimentation,,Text,,,
+TCO,Type de couple,,Text,,,
+TCP,Type capteur,,Text,,,
+TDC,Type de courant,,Text,,,
+TDCB,Tension de commande bobine,,Decimal,,Volt,"Unité source Volt absente de UOM.xlsx, laissée vide."
+TEC,Taille écran,Inch,Text,,Pouces,Unité source Pouces mappée vers UOM existante Inch.
+TEN,Tension,,Decimal,,Volt,"Unité source Volt absente de UOM.xlsx, laissée vide."
+TFM,Type de fonction / module,,Text,,,
+TIR,Tiroir,,Text,,,
+TMO,Type module,,Text,,,
+TNB,Tension bobine,,Decimal,,Volt,"Unité source Volt absente de UOM.xlsx, laissée vide."
+TNC,Tension commande,,Decimal,,Volt,"Unité source Volt absente de UOM.xlsx, laissée vide."
+TPR,Type / profil,,Text,,,
+TS,Type sonde,,Text,,,
+TYPE,Type,,Select,"BAIN D'HUILE
+GAZ
+MANETTE
+MOTEUR
+VIDE",,
+USG,Profil / usage,,Text,,,
+VER,Version / compatibilité,,Text,,,
+VIT,Vitesse,,Decimal,,tr/min,"Unité source tr/min absente de UOM.xlsx, laissée vide."

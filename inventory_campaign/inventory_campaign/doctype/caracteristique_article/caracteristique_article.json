@@ -1,0 +1,85 @@
+{
+  "actions": [],
+  "allow_import": 0,
+  "allow_rename": 0,
+  "autoname": "",
+  "creation": "2026-06-14 16:24:02.157887",
+  "custom": 0,
+  "doctype": "DocType",
+  "document_type": "",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "sequence",
+    "propriete",
+    "valeur",
+    "unite",
+    "is_major"
+  ],
+  "fields": [
+    {
+      "label": "Rang",
+      "fieldname": "sequence",
+      "fieldtype": "Int",
+      "reqd": 1,
+      "in_list_view": 1,
+      "columns": 1
+    },
+    {
+      "label": "Propriété",
+      "fieldname": "propriete",
+      "fieldtype": "Link",
+      "options": "Propriete",
+      "reqd": 1,
+      "in_list_view": 1,
+      "columns": 2
+    },
+    {
+      "label": "Valeur",
+      "fieldname": "valeur",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "columns": 2
+    },
+    {
+      "label": "Unité",
+      "fieldname": "unite",
+      "fieldtype": "Link",
+      "options": "UOM",
+      "read_only": 1,
+      "in_list_view": 1,
+      "columns": 1,
+      "description": "Récupérée automatiquement depuis la propriété."
+    },
+    {
+      "label": "Caractéristique majeure",
+      "fieldname": "is_major",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "columns": 1
+    }
+  ],
+  "grid_page_length": 50,
+  "hide_toolbar": 0,
+  "idx": 0,
+  "image_field": "",
+  "in_create": 0,
+  "index_web_pages_for_search": 1,
+  "is_submittable": 0,
+  "issingle": 0,
+  "istable": 1,
+  "links": [],
+  "modified": "2026-06-14 16:24:02.157910",
+  "modified_by": "Administrator",
+  "module": "Inventory Campaign",
+  "name": "Caracteristique Article",
+  "naming_rule": "",
+  "owner": "Administrator",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "title_field": "",
+  "track_changes": 0,
+  "quick_entry": 0
+}

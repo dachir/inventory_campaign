@@ -43,7 +43,9 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
+doctype_js = {
+    "Stock Reconciliation": "public/js/stock_reconciliation.js"
+}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -137,13 +139,11 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+    "Item": {
+        "validate": "inventory_campaign.validations.item_codification_validation.validate_item_codification"
+    }
+}
 
 # Scheduled Tasks
 # ---------------
@@ -242,3 +242,9 @@ app_license = "mit"
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
+fixtures = [
+    {"dt": "Custom Field", "filters": [["module", "=", "Inventory Campaign"]]},
+    {"dt": "Client Script", "filters": [["enabled", "=", 1],["module", "=", "Inventory Campaign"]]},
+    {"dt": "Server Script", "filters": [["disabled", "=", 0],["module", "=", "Inventory Campaign"]]},
+    {"dt": "Print Format", "filters": [["disabled", "=", 0],["module", "=", "Inventory Campaign"]]},
+]

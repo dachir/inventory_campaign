@@ -1,0 +1,226 @@
+sous_famille,famille,sous_famille_code,sequence,propriete,propriete_description,raw_unit,resolved_uom,is_major_default,valeurs_possibles,statut,source,masque_description_erp
+CS-AM,CS,AM,1,TYPE,Type,,,1,,Non validé,No encore validée,
+CS-AM,CS,AM,2,RES,Résistance,,,0,,Non validé,No encore validée,
+CS-AM,CS,AM,3,CND,Conditionnement,L / kg,,0,,Non validé,No encore validée,
+CS-AM,CS,AM,4,APP,Application,,,0,,Non validé,No encore validée,
+CS-AM,CS,AM,5,FAB,Fabricant,,,0,,Non validé,No encore validée,
+CS-CA,CS,CA,1,TYPE,Type,,,1,,Non validé,No encore validée,
+CS-CA,CS,CA,2,DIM,Dimensions,mm,Millimeter,0,,Non validé,No encore validée,
+CS-CA,CS,CA,3,CND,Conditionnement,Nos,,0,,Non validé,No encore validée,
+CS-CA,CS,CA,4,MAT,Matière,,,0,,Non validé,No encore validée,
+CS-CA,CS,CA,5,FAB,Fabricant,,,0,,Non validé,No encore validée,
+CS-EP,CS,EP,1,TYPE,Type,,,1,,Non validé,No encore validée,
+CS-EP,CS,EP,2,TAI,Taille,,,0,,Non validé,No encore validée,
+CS-EP,CS,EP,3,NPR,Niveau de protection,,,0,,Non validé,No encore validée,
+CS-EP,CS,EP,4,MAT,Matière,,,0,,Non validé,No encore validée,
+CS-EP,CS,EP,5,NOR,Norme,,,0,,Non validé,No encore validée,
+CS-GC,CS,GC,1,TYPE,Type,,,1,,Non validé,No encore validée,
+CS-GC,CS,GC,2,GRA,Grade / viscosité,,,0,,Non validé,No encore validée,
+CS-GC,CS,GC,3,CND,Conditionnement,L / kg,,0,,Non validé,No encore validée,
+CS-GC,CS,GC,4,APP,Application,,,0,,Non validé,No encore validée,
+CS-GC,CS,GC,5,FAB,Fabricant,,,0,,Non validé,No encore validée,
+CS-JG,CS,JG,1,TYPE,Type,,,1,,Non validé,No encore validée,
+CS-JG,CS,JG,2,MAT,Matière,,,0,,Non validé,No encore validée,
+CS-JG,CS,JG,3,DIM,Dimensions,mm,Millimeter,0,,Non validé,No encore validée,
+CS-JG,CS,JG,4,REFERENC,Référence,,,0,,Non validé,No encore validée,
+CS-JG,CS,JG,5,FAB,Fabricant,,,0,,Non validé,No encore validée,
+CS-MS,CS,MS,1,TYPE,Type,,,1,,Non validé,No encore validée,
+CS-MS,CS,MS,2,CAP,Capacité,L / kg,,0,,Non validé,No encore validée,
+CS-MS,CS,MS,3,CLS,Classe,,,0,,Non validé,No encore validée,
+CS-MS,CS,MS,4,DIM,Dimensions,mm,Millimeter,0,,Non validé,No encore validée,
+CS-MS,CS,MS,5,NOR,Norme,,,0,,Non validé,No encore validée,
+CS-SC,CS,SC,1,PRC,Procédé,,,1,,Non validé,No encore validée,
+CS-SC,CS,SC,2,DIA,Diamètre,mm,Millimeter,0,,Non validé,No encore validée,
+CS-SC,CS,SC,3,NUA,Nuance,,,0,,Non validé,No encore validée,
+CS-SC,CS,SC,4,TYPE,Type,,,0,,Non validé,No encore validée,
+CS-SC,CS,SC,5,CND,Conditionnement,Nos,,0,,Non validé,No encore validée,
+EE-AU,EE,AU,1,SER,Série / modèle,,,0,,Validé terrain,Eddy,AUTOMATE PLC [Série/Modèle] [Configuration E/S] [Alimentation]
+EE-AU,EE,AU,2,NES,Nombre d'entrées/sorties,Nos,Nos,1,,Validé terrain,Eddy,AUTOMATE PLC [Série/Modèle] [Configuration E/S] [Alimentation]
+EE-AU,EE,AU,3,ALIM,Alimentation,Volt,,0,,Validé terrain,Eddy,AUTOMATE PLC [Série/Modèle] [Configuration E/S] [Alimentation]
+EE-AU,EE,AU,4,CONS,Constructeur,,,0,,Validé terrain,Eddy,AUTOMATE PLC [Série/Modèle] [Configuration E/S] [Alimentation]
+EE-AU,EE,AU,5,TMO,Type module,,,0,,Validé terrain,Eddy,AUTOMATE PLC [Série/Modèle] [Configuration E/S] [Alimentation]
+EE-CA,EE,CA,1,TFM,Type de fonction / module,,,1,,Validé terrain,Eddy,CARTE ELECTRONIQUE [Fonction/Usage] [Réf Modèle] [Constructeur]
+EE-CA,EE,CA,2,REF,Référence modèle,,,0,,Validé terrain,Eddy,CARTE ELECTRONIQUE [Fonction/Usage] [Réf Modèle] [Constructeur]
+EE-CA,EE,CA,3,CONS,Constructeur,,,0,,Validé terrain,Eddy,CARTE ELECTRONIQUE [Fonction/Usage] [Réf Modèle] [Constructeur]
+EE-CA,EE,CA,4,ALIM,Alimentation,Volt,,0,,Validé terrain,Eddy,CARTE ELECTRONIQUE [Fonction/Usage] [Réf Modèle] [Constructeur]
+EE-CA,EE,CA,5,VER,Version / compatibilité,,,0,,Validé terrain,Eddy,CARTE ELECTRONIQUE [Fonction/Usage] [Réf Modèle] [Constructeur]
+EE-CP,EE,CP,1,TCP,Type capteur,,,0,,Validé terrain,Eddy,CAPTEUR [Type: PROXIMITE/PHOTO] [Signal: PNP/NPN/TOR] [Raccordement]
+EE-CP,EE,CP,2,SIG,Signal de sortie,,,1,,Validé terrain,Eddy,CAPTEUR [Type: PROXIMITE/PHOTO] [Signal: PNP/NPN/TOR] [Raccordement]
+EE-CP,EE,CP,3,RAC,Raccordement,,,0,,Validé terrain,Eddy,CAPTEUR [Type: PROXIMITE/PHOTO] [Signal: PNP/NPN/TOR] [Raccordement]
+EE-CP,EE,CP,4,ALIM,Alimentation,Volt,,0,,Validé terrain,Eddy,CAPTEUR [Type: PROXIMITE/PHOTO] [Signal: PNP/NPN/TOR] [Raccordement]
+EE-CP,EE,CP,5,PLG,Portée / plage,,,0,,Validé terrain,Eddy,CAPTEUR [Type: PROXIMITE/PHOTO] [Signal: PNP/NPN/TOR] [Raccordement]
+EE-HM,EE,HM,1,TEC,Taille écran,Pouces,Inch,1,,Validé terrain,Eddy,ECRAN IHM TACTILE [Taille/Pouces] [Résolution/Type] [Alimentation]
+EE-HM,EE,HM,2,RET,Résolution / type,,,0,,Validé terrain,Eddy,ECRAN IHM TACTILE [Taille/Pouces] [Résolution/Type] [Alimentation]
+EE-HM,EE,HM,3,ALIM,Alimentation,Volt,,0,,Validé terrain,Eddy,ECRAN IHM TACTILE [Taille/Pouces] [Résolution/Type] [Alimentation]
+EE-HM,EE,HM,4,CONS,Constructeur,,,0,,Validé terrain,Eddy,ECRAN IHM TACTILE [Taille/Pouces] [Résolution/Type] [Alimentation]
+EE-HM,EE,HM,5,COM,Interface communication,,,0,,Validé terrain,Eddy,ECRAN IHM TACTILE [Taille/Pouces] [Résolution/Type] [Alimentation]
+EL-CA,EL,CA,1,TYPE,Type,,,0,,Validé terrain,Eddy,CABLE [Type] [Nbr Conducteurs]X[Section/mm²] [Matière/Blindage]
+EL-CA,EL,CA,2,SEC,Section des conducteurs,mm²,,1,,Validé terrain,Eddy,CABLE [Type] [Nbr Conducteurs]X[Section/mm²] [Matière/Blindage]
+EL-CA,EL,CA,3,NBCD,Nbr conducteurs,Nos,Nos,0,,Validé terrain,Eddy,CABLE [Type] [Nbr Conducteurs]X[Section/mm²] [Matière/Blindage]
+EL-CA,EL,CA,4,MAT,Matière,,,0,,Validé terrain,Eddy,CABLE [Type] [Nbr Conducteurs]X[Section/mm²] [Matière/Blindage]
+EL-CA,EL,CA,5,BLI,Blindage,,,0,,Validé terrain,Eddy,CABLE [Type] [Nbr Conducteurs]X[Section/mm²] [Matière/Blindage]
+EL-CO,EL,CO,1,TYPE,Type,,,0,,Validé terrain,Eddy,CONTACTEUR [Intensité/A] BOBINE [Tension/V] [Nbr Contacts NO/NF]
+EL-CO,EL,CO,2,ICM,Intensité de coupure max,A,AMP,1,,Validé terrain,Eddy,CONTACTEUR [Intensité/A] BOBINE [Tension/V] [Nbr Contacts NO/NF]
+EL-CO,EL,CO,3,TNB,Tension bobine,Volt,,0,,Validé terrain,Eddy,CONTACTEUR [Intensité/A] BOBINE [Tension/V] [Nbr Contacts NO/NF]
+EL-CO,EL,CO,4,NBC,Nbr contacts,Nos,Nos,0,,Validé terrain,Eddy,CONTACTEUR [Intensité/A] BOBINE [Tension/V] [Nbr Contacts NO/NF]
+EL-CO,EL,CO,5,FAB,Fabricant,,,0,,Validé terrain,Eddy,CONTACTEUR [Intensité/A] BOBINE [Tension/V] [Nbr Contacts NO/NF]
+EL-DI,EL,DI,1,TYPE,Type,,,0,"VIDE, BAIN D'HUILE, GAZ, MOTEUR, MANETTE",Validé terrain,Eddy,"DISJONCTEUR [Type: [VIDE,BAIN D'HUILE,GAZ,MOTEUR,MANETTE]  [Calibre/A] [Tension/Volt][Nbr Pôles] [Fabricant]"
+EL-DI,EL,DI,2,CAL,Calibre,A,AMP,1,,Validé terrain,Eddy,"DISJONCTEUR [Type: [VIDE,BAIN D'HUILE,GAZ,MOTEUR,MANETTE]  [Calibre/A] [Tension/Volt][Nbr Pôles] [Fabricant]"
+EL-DI,EL,DI,3,TEN,Tension,Volt,,0,,Validé terrain,Eddy,"DISJONCTEUR [Type: [VIDE,BAIN D'HUILE,GAZ,MOTEUR,MANETTE]  [Calibre/A] [Tension/Volt][Nbr Pôles] [Fabricant]"
+EL-DI,EL,DI,4,NBP,Nbr Pôles,Nos,Nos,0,,Validé terrain,Eddy,"DISJONCTEUR [Type: [VIDE,BAIN D'HUILE,GAZ,MOTEUR,MANETTE]  [Calibre/A] [Tension/Volt][Nbr Pôles] [Fabricant]"
+EL-DI,EL,DI,5,FAB,Fabricant,,,0,,Validé terrain,Eddy,"DISJONCTEUR [Type: [VIDE,BAIN D'HUILE,GAZ,MOTEUR,MANETTE]  [Calibre/A] [Tension/Volt][Nbr Pôles] [Fabricant]"
+EL-FU,EL,FU,1,TYPE,Type,,,0,,Validé terrain,Eddy,FUSIBLE [Type: AM/GG/UR] [Taille] [Calibre/A] [Tension]
+EL-FU,EL,FU,2,CDP,Calibre de protection,A,AMP,1,,Validé terrain,Eddy,FUSIBLE [Type: AM/GG/UR] [Taille] [Calibre/A] [Tension]
+EL-FU,EL,FU,3,TAI,Taille,,,0,,Validé terrain,Eddy,FUSIBLE [Type: AM/GG/UR] [Taille] [Calibre/A] [Tension]
+EL-FU,EL,FU,4,TEN,Tension,Volt,,0,,Validé terrain,Eddy,FUSIBLE [Type: AM/GG/UR] [Taille] [Calibre/A] [Tension]
+EL-FU,EL,FU,5,FAB,Fabricant,,,0,,Validé terrain,Eddy,FUSIBLE [Type: AM/GG/UR] [Taille] [Calibre/A] [Tension]
+EL-MO,EL,MO,1,TDC,Type de courant,,,0,,Validé terrain,Eddy,MOTEUR ASYNCHRONE [Puissance/kW] [Vitesse/tr/min] [Fixation] [Tension]
+EL-MO,EL,MO,2,PUI,Puissance nominale,kW,Kilowatt,1,,Validé terrain,Eddy,MOTEUR ASYNCHRONE [Puissance/kW] [Vitesse/tr/min] [Fixation] [Tension]
+EL-MO,EL,MO,3,VIT,Vitesse,tr/min,,0,,Validé terrain,Eddy,MOTEUR ASYNCHRONE [Puissance/kW] [Vitesse/tr/min] [Fixation] [Tension]
+EL-MO,EL,MO,4,FIX,Fixation,,,0,,Validé terrain,Eddy,MOTEUR ASYNCHRONE [Puissance/kW] [Vitesse/tr/min] [Fixation] [Tension]
+EL-MO,EL,MO,5,TEN,Tension,Volt,,0,,Validé terrain,Eddy,MOTEUR ASYNCHRONE [Puissance/kW] [Vitesse/tr/min] [Fixation] [Tension]
+EL-RE,EL,RE,1,TYPE,Type,,,0,,Validé terrain,Eddy,RELAIS [Type: EMBROCHABLE/STAT] BOBINE [Tension/V] [Nbr Contacts]
+EL-RE,EL,RE,2,TDCB,Tension de commande bobine,Volt,,1,,Validé terrain,Eddy,RELAIS [Type: EMBROCHABLE/STAT] BOBINE [Tension/V] [Nbr Contacts]
+EL-RE,EL,RE,3,CRT,Courant,A,AMP,0,,Validé terrain,Eddy,RELAIS [Type: EMBROCHABLE/STAT] BOBINE [Tension/V] [Nbr Contacts]
+EL-RE,EL,RE,4,NBC,Nbr contacts,Nos,Nos,0,,Validé terrain,Eddy,RELAIS [Type: EMBROCHABLE/STAT] BOBINE [Tension/V] [Nbr Contacts]
+EL-RE,EL,RE,5,FAB,Fabricant,,,0,,Validé terrain,Eddy,RELAIS [Type: EMBROCHABLE/STAT] BOBINE [Tension/V] [Nbr Contacts]
+HY-DI,HY,DI,1,TYPE,Type,,,0,,Validé terrain,lokoli,DISTRIBUTEUR HYDRAULIQUE [Type] [Nbr Voies][Tiroir] [Tension Bobine]
+HY-DI,HY,DI,2,DTC,Débit max ou tension commande,L/min ou Volt,,1,,Validé terrain,lokoli,DISTRIBUTEUR HYDRAULIQUE [Type] [Nbr Voies][Tiroir] [Tension Bobine]
+HY-DI,HY,DI,3,NBV,Nbr voies,Nos,Nos,0,,Validé terrain,lokoli,DISTRIBUTEUR HYDRAULIQUE [Type] [Nbr Voies][Tiroir] [Tension Bobine]
+HY-DI,HY,DI,4,TIR,Tiroir,,,0,,Validé terrain,lokoli,DISTRIBUTEUR HYDRAULIQUE [Type] [Nbr Voies][Tiroir] [Tension Bobine]
+HY-DI,HY,DI,5,TNB,Tension bobine,Volt,,0,,Validé terrain,lokoli,DISTRIBUTEUR HYDRAULIQUE [Type] [Nbr Voies][Tiroir] [Tension Bobine]
+HY-FI,HY,FI,1,TYPE,Type,,,0,,Validé terrain,lokoli,FILTRE HYDRAULIQUE [Type: RETOUR/ASP] [Seuil/µm] [Raccordement/Débit]
+HY-FI,HY,FI,2,SEU,Seuil de filtration,µm,Micrometer,1,,Validé terrain,lokoli,FILTRE HYDRAULIQUE [Type: RETOUR/ASP] [Seuil/µm] [Raccordement/Débit]
+HY-FI,HY,FI,3,RAC,Raccordement,,,0,,Validé terrain,lokoli,FILTRE HYDRAULIQUE [Type: RETOUR/ASP] [Seuil/µm] [Raccordement/Débit]
+HY-FI,HY,FI,4,DEB,Débit,L/min,,0,,Validé terrain,lokoli,FILTRE HYDRAULIQUE [Type: RETOUR/ASP] [Seuil/µm] [Raccordement/Débit]
+HY-FI,HY,FI,5,FAB,Fabricant,,,0,,Validé terrain,lokoli,FILTRE HYDRAULIQUE [Type: RETOUR/ASP] [Seuil/µm] [Raccordement/Débit]
+HY-FL,HY,FL,1,TYPE,Type,,,0,,Validé terrain,lokoli,FLEXIBLE HYDRAULIQUE [type: DN[Diamètre Ø int ] L=[Longueur] [Embouts]
+HY-FL,HY,FL,2,DN,Diamètre nominal,DN,,1,,Validé terrain,lokoli,FLEXIBLE HYDRAULIQUE [type: DN[Diamètre Ø int ] L=[Longueur] [Embouts]
+HY-FL,HY,FL,3,LON,Longueur,mm,Millimeter,0,,Validé terrain,lokoli,FLEXIBLE HYDRAULIQUE [type: DN[Diamètre Ø int ] L=[Longueur] [Embouts]
+HY-FL,HY,FL,4,EMB,Embouts,,,0,,Validé terrain,lokoli,FLEXIBLE HYDRAULIQUE [type: DN[Diamètre Ø int ] L=[Longueur] [Embouts]
+HY-FL,HY,FL,5,PRE,Pression max,bar,Bar,0,,Validé terrain,lokoli,FLEXIBLE HYDRAULIQUE [type: DN[Diamètre Ø int ] L=[Longueur] [Embouts]
+HY-PO,HY,PO,1,TYPE,Type,,,0,,Validé terrain,lokoli,POMPE HYDRAULIQUE [Type:volumetrique/Turbo pompe] [Cylindrée] [Pression Max][type de liquide]
+HY-PO,HY,PO,2,DEB,Débit,L/min,,1,,Validé terrain,lokoli,POMPE HYDRAULIQUE [Type:volumetrique/Turbo pompe] [Cylindrée] [Pression Max][type de liquide]
+HY-PO,HY,PO,3,CYL,Cylindrée,cm³/tr,,0,,Validé terrain,lokoli,POMPE HYDRAULIQUE [Type:volumetrique/Turbo pompe] [Cylindrée] [Pression Max][type de liquide]
+HY-PO,HY,PO,4,PRE,Pression max,bar,Bar,0,,Validé terrain,lokoli,POMPE HYDRAULIQUE [Type:volumetrique/Turbo pompe] [Cylindrée] [Pression Max][type de liquide]
+HY-PO,HY,PO,5,LIQ,Type de liquide,,,0,,Validé terrain,lokoli,POMPE HYDRAULIQUE [Type:volumetrique/Turbo pompe] [Cylindrée] [Pression Max][type de liquide]
+HY-RA,HY,RA,1,TYPE,Type,,,0,,Validé terrain,lokoli,RACCORD HYDRAULIQUE [Type: IMPLANT/UNION] [Filetage/Ø Tube] [Matière]
+HY-RA,HY,RA,2,DTF,Diamètre tube ou filetage,mm / filetage,,1,,Validé terrain,lokoli,RACCORD HYDRAULIQUE [Type: IMPLANT/UNION] [Filetage/Ø Tube] [Matière]
+HY-RA,HY,RA,3,MAT,Matière,,,0,,Validé terrain,lokoli,RACCORD HYDRAULIQUE [Type: IMPLANT/UNION] [Filetage/Ø Tube] [Matière]
+HY-RA,HY,RA,4,FRM,Forme,,,0,,Validé terrain,lokoli,RACCORD HYDRAULIQUE [Type: IMPLANT/UNION] [Filetage/Ø Tube] [Matière]
+HY-RA,HY,RA,5,PRE,Pression max,bar,Bar,0,,Validé terrain,lokoli,RACCORD HYDRAULIQUE [Type: IMPLANT/UNION] [Filetage/Ø Tube] [Matière]
+HY-VE,HY,VE,1,TYPE,Type,,,0,,Validé terrain,lokoli,VERIN HYDRAULIQUE [Type] Ø[Piston]/Ø[Tige]X[Course] [Pression Max]
+HY-VE,HY,VE,2,DAP,Diamètre alésage / piston,mm,Millimeter,1,,Validé terrain,lokoli,VERIN HYDRAULIQUE [Type] Ø[Piston]/Ø[Tige]X[Course] [Pression Max]
+HY-VE,HY,VE,3,DGT,Diamètre tige,mm,Millimeter,0,,Validé terrain,lokoli,VERIN HYDRAULIQUE [Type] Ø[Piston]/Ø[Tige]X[Course] [Pression Max]
+HY-VE,HY,VE,4,COU,Course,mm,Millimeter,0,,Validé terrain,lokoli,VERIN HYDRAULIQUE [Type] Ø[Piston]/Ø[Tige]X[Course] [Pression Max]
+HY-VE,HY,VE,5,PRE,Pression max,bar,Bar,0,,Validé terrain,lokoli,VERIN HYDRAULIQUE [Type] Ø[Piston]/Ø[Tige]X[Course] [Pression Max]
+IN-CP,IN,CP,1,TYPE,Type,,,0,,Validé terrain,Eddy,CAPTEUR PRESSION [Plage/Bars] [Signal: 4-20mA/TOR] [Raccordement]
+IN-CP,IN,CP,2,PME,Pression maximale de l'échelle,bar,Bar,1,,Validé terrain,Eddy,CAPTEUR PRESSION [Plage/Bars] [Signal: 4-20mA/TOR] [Raccordement]
+IN-CP,IN,CP,3,SIG,Signal de sortie,,,0,,Validé terrain,Eddy,CAPTEUR PRESSION [Plage/Bars] [Signal: 4-20mA/TOR] [Raccordement]
+IN-CP,IN,CP,4,RAC,Raccordement,,,0,,Validé terrain,Eddy,CAPTEUR PRESSION [Plage/Bars] [Signal: 4-20mA/TOR] [Raccordement]
+IN-CP,IN,CP,5,FAB,Fabricant,,,0,,Validé terrain,Eddy,CAPTEUR PRESSION [Plage/Bars] [Signal: 4-20mA/TOR] [Raccordement]
+IN-DE,IN,DE,1,TYPE,Type,,,0,,Validé terrain,Eddy,DEBITMETRE [Type] [Plage Débit] [DN/Raccordement] [Sortie]
+IN-DE,IN,DE,2,PDM,Plage de débit maximale,m³/h,,1,,Validé terrain,Eddy,DEBITMETRE [Type] [Plage Débit] [DN/Raccordement] [Sortie]
+IN-DE,IN,DE,3,DNR,DN / raccordement,,,0,,Validé terrain,Eddy,DEBITMETRE [Type] [Plage Débit] [DN/Raccordement] [Sortie]
+IN-DE,IN,DE,4,SOR,Sortie,,,0,,Validé terrain,Eddy,DEBITMETRE [Type] [Plage Débit] [DN/Raccordement] [Sortie]
+IN-DE,IN,DE,5,FAB,Fabricant,,,0,,Validé terrain,Eddy,DEBITMETRE [Type] [Plage Débit] [DN/Raccordement] [Sortie]
+IN-TE,IN,TE,1,TS,Type sonde,,,0,,Validé terrain,Eddy,SONDE TEMPERATURE [Type: PT100/TC-K] L=[Longueur] Ø[Tige]
+IN-TE,IN,TE,2,PMEAS,Plage de mesure,°C,Celsius,1,,Validé terrain,Eddy,SONDE TEMPERATURE [Type: PT100/TC-K] L=[Longueur] Ø[Tige]
+IN-TE,IN,TE,3,LON,Longueur,mm,Millimeter,0,,Validé terrain,Eddy,SONDE TEMPERATURE [Type: PT100/TC-K] L=[Longueur] Ø[Tige]
+IN-TE,IN,TE,4,DGT,Diamètre tige,mm,Millimeter,0,,Validé terrain,Eddy,SONDE TEMPERATURE [Type: PT100/TC-K] L=[Longueur] Ø[Tige]
+IN-TE,IN,TE,5,RAC,Raccordement,,,0,,Validé terrain,Eddy,SONDE TEMPERATURE [Type: PT100/TC-K] L=[Longueur] Ø[Tige]
+IN-TH,IN,TH,1,TCO,Type de couple,,,1,,Validé terrain,Eddy,THERMOCOUPLE [Type: K/J/T] [Longueur Gaine] [Raccordement]
+IN-TH,IN,TH,2,LGA,Longueur gaine,mm,Millimeter,0,,Validé terrain,Eddy,THERMOCOUPLE [Type: K/J/T] [Longueur Gaine] [Raccordement]
+IN-TH,IN,TH,3,DGA,Diamètre gaine,mm,Millimeter,0,,Validé terrain,Eddy,THERMOCOUPLE [Type: K/J/T] [Longueur Gaine] [Raccordement]
+IN-TH,IN,TH,4,RAC,Raccordement,,,0,,Validé terrain,Eddy,THERMOCOUPLE [Type: K/J/T] [Longueur Gaine] [Raccordement]
+IN-TH,IN,TH,5,FAB,Fabricant,,,0,,Validé terrain,Eddy,THERMOCOUPLE [Type: K/J/T] [Longueur Gaine] [Raccordement]
+IN-VA,IN,VA,1,TAL,Type alimentation,,,0,,Validé terrain,Eddy,"VARIATEUR VITESSE [Type: MONO, TRIPHASE] [Puissance/kW]  [Mode: Réseau/Simple][Fabricant]"
+IN-VA,IN,VA,2,PMM,Puissance moteur max supportée,kW,Kilowatt,1,,Validé terrain,Eddy,"VARIATEUR VITESSE [Type: MONO, TRIPHASE] [Puissance/kW]  [Mode: Réseau/Simple][Fabricant]"
+IN-VA,IN,VA,3,MOD,Mode,,,0,,Validé terrain,Eddy,"VARIATEUR VITESSE [Type: MONO, TRIPHASE] [Puissance/kW]  [Mode: Réseau/Simple][Fabricant]"
+IN-VA,IN,VA,4,TEN,Tension,Volt,,0,,Validé terrain,Eddy,"VARIATEUR VITESSE [Type: MONO, TRIPHASE] [Puissance/kW]  [Mode: Réseau/Simple][Fabricant]"
+IN-VA,IN,VA,5,FAB,Fabricant,,,0,,Validé terrain,Eddy,"VARIATEUR VITESSE [Type: MONO, TRIPHASE] [Puissance/kW]  [Mode: Réseau/Simple][Fabricant]"
+ME-CH,ME,CH,1,TYPE,Type,,,0,,Validé terrain,lokoli,CHAINE ROULEAUX [Pas] [Type: SIMPLEX/DUPLEX] L=[Nbr Maillons/Longueur en mm]
+ME-CH,ME,CH,2,PAS,Pas de la chaîne,mm,Millimeter,1,,Validé terrain,lokoli,CHAINE ROULEAUX [Pas] [Type: SIMPLEX/DUPLEX] L=[Nbr Maillons/Longueur en mm]
+ME-CH,ME,CH,3,NBM,Nbr maillons,Nos,Nos,0,,Validé terrain,lokoli,CHAINE ROULEAUX [Pas] [Type: SIMPLEX/DUPLEX] L=[Nbr Maillons/Longueur en mm]
+ME-CH,ME,CH,4,LON,Longueur,mm,Millimeter,0,,Validé terrain,lokoli,CHAINE ROULEAUX [Pas] [Type: SIMPLEX/DUPLEX] L=[Nbr Maillons/Longueur en mm]
+ME-CH,ME,CH,5,STD,Standard / matière,,,0,,Validé terrain,lokoli,CHAINE ROULEAUX [Pas] [Type: SIMPLEX/DUPLEX] L=[Nbr Maillons/Longueur en mm]
+ME-CO,ME,CO,1,TPR,Type / profil,,,0,,Validé terrain,lokoli,COURROIE [Type: Profil(TRAP/DENT/plate)] [dimension: L=[Longueurx epaisseur  en mm]
+ME-CO,ME,CO,2,LPR,Longueur primitive,mm,Millimeter,1,,Validé terrain,lokoli,COURROIE [Type: Profil(TRAP/DENT/plate)] [dimension: L=[Longueurx epaisseur  en mm]
+ME-CO,ME,CO,3,LEP,Largeur / épaisseur,mm,Millimeter,0,,Validé terrain,lokoli,COURROIE [Type: Profil(TRAP/DENT/plate)] [dimension: L=[Longueurx epaisseur  en mm]
+ME-CO,ME,CO,4,PDE,Pas / denture,,,0,,Validé terrain,lokoli,COURROIE [Type: Profil(TRAP/DENT/plate)] [dimension: L=[Longueurx epaisseur  en mm]
+ME-CO,ME,CO,5,MAT,Matière,,,0,,Validé terrain,lokoli,COURROIE [Type: Profil(TRAP/DENT/plate)] [dimension: L=[Longueurx epaisseur  en mm]
+ME-EN,ME,EN,1,TYPE,Type,,,0,,Validé terrain,lokoli,ENGRENAGE [Type: DROIT/HELIC] [Module]  [Ø exterieur/Matière][Ø Alésage/Matière]
+ME-EN,ME,EN,2,NDR,Nombre de dents / rapport,Nos / ratio,,1,,Validé terrain,lokoli,ENGRENAGE [Type: DROIT/HELIC] [Module]  [Ø exterieur/Matière][Ø Alésage/Matière]
+ME-EN,ME,EN,3,MODU,Module,,,0,,Validé terrain,lokoli,ENGRENAGE [Type: DROIT/HELIC] [Module]  [Ø exterieur/Matière][Ø Alésage/Matière]
+ME-EN,ME,EN,4,DIM,Dimensions,mm,Millimeter,0,,Validé terrain,lokoli,ENGRENAGE [Type: DROIT/HELIC] [Module]  [Ø exterieur/Matière][Ø Alésage/Matière]
+ME-EN,ME,EN,5,MAT,Matière,,,0,,Validé terrain,lokoli,ENGRENAGE [Type: DROIT/HELIC] [Module]  [Ø exterieur/Matière][Ø Alésage/Matière]
+ME-JO,ME,JO,1,TYPE,Type,,,0,,Validé terrain,lokoli,JOINT [Type: SPI/O-RING/LEVRE] [Dimensions: IntXExtXEp] [Matière: NBR/FKM]
+ME-JO,ME,JO,2,DIA,Diamètre,mm,Millimeter,1,,Validé terrain,lokoli,JOINT [Type: SPI/O-RING/LEVRE] [Dimensions: IntXExtXEp] [Matière: NBR/FKM]
+ME-JO,ME,JO,3,DIM,Dimensions,mm,Millimeter,0,,Validé terrain,lokoli,JOINT [Type: SPI/O-RING/LEVRE] [Dimensions: IntXExtXEp] [Matière: NBR/FKM]
+ME-JO,ME,JO,4,MAT,Matière,,,0,,Validé terrain,lokoli,JOINT [Type: SPI/O-RING/LEVRE] [Dimensions: IntXExtXEp] [Matière: NBR/FKM]
+ME-JO,ME,JO,5,USG,Profil / usage,,,0,,Validé terrain,lokoli,JOINT [Type: SPI/O-RING/LEVRE] [Dimensions: IntXExtXEp] [Matière: NBR/FKM]
+ME-RO,ME,RO,1,TYPE,Type,,,0,,Validé terrain,lokoli,ROULEMENT [Type: BILLES/ROULEAUX] [Série/Réf] Ø[Intérieur]XØ[Extérieur]X[Épaisseur] [Flasque/Jeu]
+ME-RO,ME,RO,2,DIAI,Diamètre intérieur / alésage,mm,Millimeter,1,,Validé terrain,lokoli,ROULEMENT [Type: BILLES/ROULEAUX] [Série/Réf] Ø[Intérieur]XØ[Extérieur]X[Épaisseur] [Flasque/Jeu]
+ME-RO,ME,RO,3,SR,Série / référence,,,0,,Validé terrain,lokoli,ROULEMENT [Type: BILLES/ROULEAUX] [Série/Réf] Ø[Intérieur]XØ[Extérieur]X[Épaisseur] [Flasque/Jeu]
+ME-RO,ME,RO,4,DIAE,Diamètre extérieur,mm,Millimeter,0,,Validé terrain,lokoli,ROULEMENT [Type: BILLES/ROULEAUX] [Série/Réf] Ø[Intérieur]XØ[Extérieur]X[Épaisseur] [Flasque/Jeu]
+ME-RO,ME,RO,5,EPJ,Épaisseur / protection-jeu,mm / sans unité,,0,,Validé terrain,lokoli,ROULEMENT [Type: BILLES/ROULEAUX] [Série/Réf] Ø[Intérieur]XØ[Extérieur]X[Épaisseur] [Flasque/Jeu]
+ME-VI,ME,VI,1,FTT,Forme de la tête,,,1,,Validé terrain,lokoli,VIS [Type: CHC/TH/FHC] M [Diamètre]X[Longueur]en mm [Matiere:Acier/Inox]
+ME-VI,ME,VI,2,DIA,Diamètre,mm,Millimeter,0,,Validé terrain,lokoli,VIS [Type: CHC/TH/FHC] M [Diamètre]X[Longueur]en mm [Matiere:Acier/Inox]
+ME-VI,ME,VI,3,LON,Longueur,mm,Millimeter,0,,Validé terrain,lokoli,VIS [Type: CHC/TH/FHC] M [Diamètre]X[Longueur]en mm [Matiere:Acier/Inox]
+ME-VI,ME,VI,4,MAT,Matière,,,0,,Validé terrain,lokoli,VIS [Type: CHC/TH/FHC] M [Diamètre]X[Longueur]en mm [Matiere:Acier/Inox]
+ME-VI,ME,VI,5,FIL,Filetage,,,0,,Validé terrain,lokoli,VIS [Type: CHC/TH/FHC] M [Diamètre]X[Longueur]en mm [Matiere:Acier/Inox]
+PN-CO,PN,CO,1,TYPE,Type,,,0,,Validé terrain,Eddy,COMPRESSEUR AIR [Puissance/kW] [Débit] [Capacité Cuve/L] [Pression]
+PN-CO,PN,CO,2,PMD,Puissance moteur ou débit,kW ou L/min,,1,,Validé terrain,Eddy,COMPRESSEUR AIR [Puissance/kW] [Débit] [Capacité Cuve/L] [Pression]
+PN-CO,PN,CO,3,CCU,Capacité cuve,L,L,0,,Validé terrain,Eddy,COMPRESSEUR AIR [Puissance/kW] [Débit] [Capacité Cuve/L] [Pression]
+PN-CO,PN,CO,4,PRE,Pression max,bar,Bar,0,,Validé terrain,Eddy,COMPRESSEUR AIR [Puissance/kW] [Débit] [Capacité Cuve/L] [Pression]
+PN-CO,PN,CO,5,FAB,Fabricant,,,0,,Validé terrain,Eddy,COMPRESSEUR AIR [Puissance/kW] [Débit] [Capacité Cuve/L] [Pression]
+PN-DI,PN,DI,1,TYPE,Type,,,0,,Validé terrain,Eddy,DISTRIBUTEUR HYDRAULIQUE [Type] [Nbr Voies][Tiroir] [Tension Bobine]
+PN-DI,PN,DI,2,DTC,Débit max ou tension commande,L/min ou Volt,,1,,Validé terrain,Eddy,DISTRIBUTEUR HYDRAULIQUE [Type] [Nbr Voies][Tiroir] [Tension Bobine]
+PN-DI,PN,DI,3,NBV,Nbr voies,Nos,Nos,0,,Validé terrain,Eddy,DISTRIBUTEUR HYDRAULIQUE [Type] [Nbr Voies][Tiroir] [Tension Bobine]
+PN-DI,PN,DI,4,TIR,Tiroir,,,0,,Validé terrain,Eddy,DISTRIBUTEUR HYDRAULIQUE [Type] [Nbr Voies][Tiroir] [Tension Bobine]
+PN-DI,PN,DI,5,TNB,Tension bobine,Volt,,0,,Validé terrain,Eddy,DISTRIBUTEUR HYDRAULIQUE [Type] [Nbr Voies][Tiroir] [Tension Bobine]
+PN-EV,PN,EV,1,FON,Fonction,,,0,,Validé terrain,Eddy,"ELECTROVANNE PNEU [Fonction: 5/2, 3/2] [Filetage] [Tension Commande]"
+PN-EV,PN,EV,2,DDR,Diamètre de raccordement,mm / filetage,,1,,Validé terrain,Eddy,"ELECTROVANNE PNEU [Fonction: 5/2, 3/2] [Filetage] [Tension Commande]"
+PN-EV,PN,EV,3,FIL,Filetage,,,0,,Validé terrain,Eddy,"ELECTROVANNE PNEU [Fonction: 5/2, 3/2] [Filetage] [Tension Commande]"
+PN-EV,PN,EV,4,TNC,Tension commande,Volt,,0,,Validé terrain,Eddy,"ELECTROVANNE PNEU [Fonction: 5/2, 3/2] [Filetage] [Tension Commande]"
+PN-EV,PN,EV,5,TYPE,Type,,,0,,Validé terrain,Eddy,"ELECTROVANNE PNEU [Fonction: 5/2, 3/2] [Filetage] [Tension Commande]"
+PN-RA,PN,RA,1,TYPE,Type,,,0,,Validé terrain,Eddy,RACCORD PNEUMATIQUE [Type: INSTANT/NIPPLE] Ø[Tube] [Filetage]
+PN-RA,PN,RA,2,DET,Diamètre extérieur du tube,mm,Millimeter,1,,Validé terrain,Eddy,RACCORD PNEUMATIQUE [Type: INSTANT/NIPPLE] Ø[Tube] [Filetage]
+PN-RA,PN,RA,3,FIL,Filetage,,,0,,Validé terrain,Eddy,RACCORD PNEUMATIQUE [Type: INSTANT/NIPPLE] Ø[Tube] [Filetage]
+PN-RA,PN,RA,4,MAT,Matière,,,0,,Validé terrain,Eddy,RACCORD PNEUMATIQUE [Type: INSTANT/NIPPLE] Ø[Tube] [Filetage]
+PN-RA,PN,RA,5,FRM,Forme,,,0,,Validé terrain,Eddy,RACCORD PNEUMATIQUE [Type: INSTANT/NIPPLE] Ø[Tube] [Filetage]
+PN-RE,PN,RE,1,FIL,Filetage,,,0,,Validé terrain,Eddy,REGULATEUR PRESSION [Filetage] [Plage/Bars] [Options: MANOMETRE/FILTRE]
+PN-RE,PN,RE,2,PPM,Plage de pression maximale,bar,Bar,1,,Validé terrain,Eddy,REGULATEUR PRESSION [Filetage] [Plage/Bars] [Options: MANOMETRE/FILTRE]
+PN-RE,PN,RE,3,OPT,Options,,,0,,Validé terrain,Eddy,REGULATEUR PRESSION [Filetage] [Plage/Bars] [Options: MANOMETRE/FILTRE]
+PN-RE,PN,RE,4,TYPE,Type,,,0,,Validé terrain,Eddy,REGULATEUR PRESSION [Filetage] [Plage/Bars] [Options: MANOMETRE/FILTRE]
+PN-RE,PN,RE,5,DEB,Débit,L/min,,0,,Validé terrain,Eddy,REGULATEUR PRESSION [Filetage] [Plage/Bars] [Options: MANOMETRE/FILTRE]
+PN-TU,PN,TU,1,MAT,Matière,,,0,,Validé terrain,Eddy,TUBE PNEUMATIQUE [Matière: PU/PA] Ø[Extérieur]XØ[Intérieur] [Couleur]
+PN-TU,PN,TU,2,DXI,Diamètre extérieur x intérieur,mm,Millimeter,1,,Validé terrain,Eddy,TUBE PNEUMATIQUE [Matière: PU/PA] Ø[Extérieur]XØ[Intérieur] [Couleur]
+PN-TU,PN,TU,3,CLR,Couleur,,,0,,Validé terrain,Eddy,TUBE PNEUMATIQUE [Matière: PU/PA] Ø[Extérieur]XØ[Intérieur] [Couleur]
+PN-TU,PN,TU,4,PRE,Pression max,bar,Bar,0,,Validé terrain,Eddy,TUBE PNEUMATIQUE [Matière: PU/PA] Ø[Extérieur]XØ[Intérieur] [Couleur]
+PN-TU,PN,TU,5,LON,Longueur,mm,Millimeter,0,,Validé terrain,Eddy,TUBE PNEUMATIQUE [Matière: PU/PA] Ø[Extérieur]XØ[Intérieur] [Couleur]
+PN-VE,PN,VE,1,TYPE,Type,,,0,,Validé terrain,Eddy,VERIN PNEUMATIQUE [Type: ISO/COMPACT] Ø[Alésage]X[Course] [Amortissement]
+PN-VE,PN,VE,2,DAP,Diamètre alésage / piston,mm,Millimeter,1,,Validé terrain,Eddy,VERIN PNEUMATIQUE [Type: ISO/COMPACT] Ø[Alésage]X[Course] [Amortissement]
+PN-VE,PN,VE,3,COU,Course,mm,Millimeter,0,,Validé terrain,Eddy,VERIN PNEUMATIQUE [Type: ISO/COMPACT] Ø[Alésage]X[Course] [Amortissement]
+PN-VE,PN,VE,4,AMO,Amortissement,,,0,,Validé terrain,Eddy,VERIN PNEUMATIQUE [Type: ISO/COMPACT] Ø[Alésage]X[Course] [Amortissement]
+PN-VE,PN,VE,5,RAC,Raccordement,,,0,,Validé terrain,Eddy,VERIN PNEUMATIQUE [Type: ISO/COMPACT] Ø[Alésage]X[Course] [Amortissement]
+SE-AL,SE,AL,1,TYPE,Type,,,0,,Validé terrain,Blaise,ALARME SONORE [Type: SIRENE/BUZZER] [Puissance/dB] [Tension V]
+SE-AL,SE,AL,2,PAC,Puissance acoustique,dB,,1,,Validé terrain,Blaise,ALARME SONORE [Type: SIRENE/BUZZER] [Puissance/dB] [Tension V]
+SE-AL,SE,AL,3,TEN,Tension,Volt,,0,,Validé terrain,Blaise,ALARME SONORE [Type: SIRENE/BUZZER] [Puissance/dB] [Tension V]
+SE-AL,SE,AL,4,MDS,Mode de signal,,,0,,Validé terrain,Blaise,ALARME SONORE [Type: SIRENE/BUZZER] [Puissance/dB] [Tension V]
+SE-AL,SE,AL,5,FAB,Fabricant,,,0,,Validé terrain,Blaise,ALARME SONORE [Type: SIRENE/BUZZER] [Puissance/dB] [Tension V]
+SE-EC,SE,EC,1,TYPE,Type,,,0,,Validé terrain,Blaise,ECLAIRAGE [Type: LED/Halogènes] [Puissance/W] [Tension/V]
+SE-EC,SE,EC,2,PEN,Puissance électrique nominale,W,Watt,1,,Validé terrain,Blaise,ECLAIRAGE [Type: LED/Halogènes] [Puissance/W] [Tension/V]
+SE-EC,SE,EC,3,TEN,Tension,Volt,,0,,Validé terrain,Blaise,ECLAIRAGE [Type: LED/Halogènes] [Puissance/W] [Tension/V]
+SE-EC,SE,EC,4,FOR,Forme / format,,,0,,Validé terrain,Blaise,ECLAIRAGE [Type: LED/Halogènes] [Puissance/W] [Tension/V]
+SE-EC,SE,EC,5,FAB,Fabricant,,,0,,Validé terrain,Blaise,ECLAIRAGE [Type: LED/Halogènes] [Puissance/W] [Tension/V]
+SE-PM,SE,PM,1,TYPE,Type,,,0,,Validé terrain,Blaise,PROTECTION MACHINE [Type: CARTER/GRILLAGE/Switch] [Dimensions][Capteurs sécurité/Fin de course/dispositif d'arret d'urgence] [Matière][Tension]
+SE-PM,SE,PM,2,MAF,Matériau / fonction,,,1,,Validé terrain,Blaise,PROTECTION MACHINE [Type: CARTER/GRILLAGE/Switch] [Dimensions][Capteurs sécurité/Fin de course/dispositif d'arret d'urgence] [Matière][Tension]
+SE-PM,SE,PM,3,DIM,Dimensions,mm,Millimeter,0,,Validé terrain,Blaise,PROTECTION MACHINE [Type: CARTER/GRILLAGE/Switch] [Dimensions][Capteurs sécurité/Fin de course/dispositif d'arret d'urgence] [Matière][Tension]
+SE-PM,SE,PM,4,CPS,Capteurs sécurité,,,0,,Validé terrain,Blaise,PROTECTION MACHINE [Type: CARTER/GRILLAGE/Switch] [Dimensions][Capteurs sécurité/Fin de course/dispositif d'arret d'urgence] [Matière][Tension]
+SE-PM,SE,PM,5,TEN,Tension,Volt,,0,,Validé terrain,Blaise,PROTECTION MACHINE [Type: CARTER/GRILLAGE/Switch] [Dimensions][Capteurs sécurité/Fin de course/dispositif d'arret d'urgence] [Matière][Tension]
+SE-SI,SE,SI,1,TYPE,Type,,,0,,Validé terrain,Blaise,SIGNALISATION [Type: VOYANT] [Couleur] [Tension V][ Forme]
+SE-SI,SE,SI,2,CTA,Couleur ou type d'alerte,,,1,,Validé terrain,Blaise,SIGNALISATION [Type: VOYANT] [Couleur] [Tension V][ Forme]
+SE-SI,SE,SI,3,TEN,Tension,Volt,,0,,Validé terrain,Blaise,SIGNALISATION [Type: VOYANT] [Couleur] [Tension V][ Forme]
+SE-SI,SE,SI,4,FRM,Forme,,,0,,Validé terrain,Blaise,SIGNALISATION [Type: VOYANT] [Couleur] [Tension V][ Forme]
+SE-SI,SE,SI,5,FAB,Fabricant,,,0,,Validé terrain,Blaise,SIGNALISATION [Type: VOYANT] [Couleur] [Tension V][ Forme]

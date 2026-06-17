@@ -1,0 +1,256 @@
+{
+ "actions": [],
+ "autoname": "format:IC-.YYYY.-.#####",
+ "creation": "2026-05-21 11:33:10.291375",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "campaign_section",
+  "campaign_name",
+  "company",
+  "warehouse",
+  "status",
+  "date_column",
+  "start_date",
+  "end_date",
+  "responsible_user",
+  "branch",
+  "security_section",
+  "allowed_network_ssid",
+  "allowed_ip_range",
+  "server_reachable_url",
+  "summary_section",
+  "total_sessions",
+  "total_items_counted",
+  "notes",
+  "site_section",
+  "erpnext_site",
+  "site_url",
+  "total_unplanned_items",
+  "total_unplanned_warehouses",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "campaign_section",
+   "fieldtype": "Section Break",
+   "label": "Campaign"
+  },
+  {
+   "fieldname": "campaign_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Campaign Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "description": "Main stock site. Child Warehouses represent locations/emplacements.",
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Parent Warehouse",
+   "options": "Warehouse",
+   "reqd": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nOpen\nClosed\nCancelled",
+   "reqd": 1
+  },
+  {
+   "fieldname": "date_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Start Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "end_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "End Date"
+  },
+  {
+   "fieldname": "responsible_user",
+   "fieldtype": "Link",
+   "label": "Responsible User",
+   "options": "User"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "security_section",
+   "fieldtype": "Section Break",
+   "label": "Access Security"
+  },
+  {
+   "fieldname": "allowed_network_ssid",
+   "fieldtype": "Data",
+   "label": "Allowed Network SSID"
+  },
+  {
+   "fieldname": "allowed_ip_range",
+   "fieldtype": "Small Text",
+   "label": "Allowed IP Range"
+  },
+  {
+   "description": "Optional URL used by the mobile app to confirm that ERPNext is reachable from the authorized network.",
+   "fieldname": "server_reachable_url",
+   "fieldtype": "Data",
+   "label": "Server Reachable URL"
+  },
+  {
+   "fieldname": "summary_section",
+   "fieldtype": "Section Break",
+   "label": "Summary"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_sessions",
+   "fieldtype": "Int",
+   "label": "Total Sessions",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_items_counted",
+   "fieldtype": "Int",
+   "label": "Total Items Counted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "site_section",
+   "fieldtype": "Section Break",
+   "label": "ERPNext Site"
+  },
+  {
+   "default": "erpv15dev.marsavco.com",
+   "description": "Logical ERPNext site/tenant for this campaign.",
+   "fieldname": "erpnext_site",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "ERPNext Site"
+  },
+  {
+   "description": "Optional base URL exposed to the mobile app after token validation.",
+   "fieldname": "site_url",
+   "fieldtype": "Data",
+   "label": "Site URL"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_unplanned_items",
+   "fieldtype": "Int",
+   "label": "Total Unplanned Items",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_unplanned_warehouses",
+   "fieldtype": "Int",
+   "label": "Total Unplanned Warehouses",
+   "read_only": 1
+  },
+  {
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "label": "Branch",
+   "options": "Branch",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Inventory Campaign",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-06-16 19:26:10.245774",
+ "modified_by": "Administrator",
+ "module": "Inventory Campaign",
+ "name": "Inventory Campaign",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Inventory Campaign Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock User"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "campaign_name"
+}

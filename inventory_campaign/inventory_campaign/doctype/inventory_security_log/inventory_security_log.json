@@ -1,0 +1,233 @@
+{
+ "actions": [],
+ "autoname": "format:ISL-.YYYY.-.#####",
+ "creation": "2026-05-21 12:17:54.364945",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "event_section",
+  "event_type",
+  "status",
+  "security_mode",
+  "event_time",
+  "context_section",
+  "campaign",
+  "session",
+  "access_token",
+  "operator_column",
+  "operator_user",
+  "operator_name",
+  "device_id",
+  "network_section",
+  "ip_address",
+  "ssid",
+  "request_path",
+  "message_section",
+  "message",
+  "payload_json",
+  "inventory_agent",
+  "mobile_session_id",
+  "request_column"
+ ],
+ "fields": [
+  {
+   "fieldname": "event_section",
+   "fieldtype": "Section Break",
+   "label": "Security Event"
+  },
+  {
+   "description": "Examples: TOKEN_VALID, TOKEN_INVALID, TOKEN_EXPIRED, NETWORK_VALID, NETWORK_INVALID, BYPASS_ALLOWED, ACCESS_GRANTED, ACCESS_DENIED.",
+   "fieldname": "event_type",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Event Type",
+   "reqd": 1
+  },
+  {
+   "default": "Success",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Success\nFailed\nWarning\nBlocked\nAllowed",
+   "reqd": 1
+  },
+  {
+   "fieldname": "security_mode",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Security Mode",
+   "options": "Disabled\nAudit Only\nEnforced"
+  },
+  {
+   "description": "Can be set by API code. If empty, the document creation timestamp remains the fallback audit time.",
+   "fieldname": "event_time",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Event Time",
+   "read_only": 1
+  },
+  {
+   "fieldname": "context_section",
+   "fieldtype": "Section Break",
+   "label": "Inventory Context"
+  },
+  {
+   "fieldname": "campaign",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Inventory Campaign",
+   "options": "Inventory Campaign"
+  },
+  {
+   "fieldname": "session",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Inventory Session",
+   "options": "Inventory Session"
+  },
+  {
+   "description": "Reference to the token document when known. Never store the clear token here.",
+   "fieldname": "access_token",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Inventory Access Token",
+   "options": "Inventory Access Token"
+  },
+  {
+   "fieldname": "operator_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "operator_user",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Operator User",
+   "options": "User"
+  },
+  {
+   "fieldname": "operator_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Operator Name"
+  },
+  {
+   "fieldname": "device_id",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Device ID"
+  },
+  {
+   "fieldname": "network_section",
+   "fieldtype": "Section Break",
+   "label": "Network Context"
+  },
+  {
+   "fieldname": "ip_address",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "IP Address"
+  },
+  {
+   "description": "SSID is a weak client-declared signal. It must not be treated as the only proof of network validity.",
+   "fieldname": "ssid",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "SSID"
+  },
+  {
+   "fieldname": "request_path",
+   "fieldtype": "Data",
+   "label": "Request Path"
+  },
+  {
+   "fieldname": "message_section",
+   "fieldtype": "Section Break",
+   "label": "Message"
+  },
+  {
+   "fieldname": "message",
+   "fieldtype": "Small Text",
+   "label": "Message"
+  },
+  {
+   "description": "Never store clear tokens or sensitive secrets here.",
+   "fieldname": "payload_json",
+   "fieldtype": "Code",
+   "label": "Payload JSON",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "inventory_agent",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Inventory Agent",
+   "options": "Inventory Agent"
+  },
+  {
+   "fieldname": "mobile_session_id",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Mobile Session ID"
+  },
+  {
+   "fieldname": "request_column",
+   "fieldtype": "Column Break"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-15 21:20:49.031556",
+ "modified_by": "Administrator",
+ "module": "Inventory Campaign",
+ "name": "Inventory Security Log",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Inventory Campaign Manager",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock User"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "event_type",
+ "track_changes": 1
+}

@@ -1,0 +1,206 @@
+{
+ "actions": [],
+ "creation": "2026-05-21 12:14:32.571591",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "security_section",
+  "security_mode",
+  "require_access_token",
+  "require_network_check",
+  "security_column",
+  "allow_development_bypass",
+  "log_security_events",
+  "token_section",
+  "default_token_validity_hours",
+  "max_sessions_per_token",
+  "network_section",
+  "allowed_ssids",
+  "allowed_ip_ranges",
+  "protocol",
+  "server_url",
+  "server_reachable_url",
+  "notes_section",
+  "notes",
+  "require_agent_token",
+  "mobile_credential_section",
+  "default_mobile_credential_ttl_minutes"
+ ],
+ "fields": [
+  {
+   "fieldname": "security_section",
+   "fieldtype": "Section Break",
+   "label": "Security Mode"
+  },
+  {
+   "default": "Disabled",
+   "description": "Disabled during early development/testing. Enforced only in final hardening.",
+   "fieldname": "security_mode",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Security Mode",
+   "options": "Disabled\nAudit Only\nEnforced",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "description": "Backward-compatible alias for older security API code. Do not use as the Sprint 1 business model.",
+   "fieldname": "require_access_token",
+   "fieldtype": "Check",
+   "label": "Require Access Token (Legacy Alias)"
+  },
+  {
+   "default": "0",
+   "description": "Keep disabled during early development/testing.",
+   "fieldname": "require_network_check",
+   "fieldtype": "Check",
+   "label": "Require Network Check"
+  },
+  {
+   "fieldname": "security_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "Allows development/testing without blocking token or network checks.",
+   "fieldname": "allow_development_bypass",
+   "fieldtype": "Check",
+   "label": "Allow Development Bypass"
+  },
+  {
+   "default": "1",
+   "description": "Recommended even when security is not enforced, to prepare audit mode.",
+   "fieldname": "log_security_events",
+   "fieldtype": "Check",
+   "label": "Log Security Events"
+  },
+  {
+   "fieldname": "token_section",
+   "fieldtype": "Section Break",
+   "label": "Token Defaults"
+  },
+  {
+   "default": "24",
+   "fieldname": "default_token_validity_hours",
+   "fieldtype": "Int",
+   "label": "Default Token Validity Hours"
+  },
+  {
+   "default": "1",
+   "fieldname": "max_sessions_per_token",
+   "fieldtype": "Int",
+   "label": "Max Sessions Per Token"
+  },
+  {
+   "fieldname": "network_section",
+   "fieldtype": "Section Break",
+   "label": "Network Defaults"
+  },
+  {
+   "description": "One SSID per line. SSID is weak and must not be the only proof.",
+   "fieldname": "allowed_ssids",
+   "fieldtype": "Small Text",
+   "label": "Allowed SSIDs"
+  },
+  {
+   "description": "One CIDR or IP range per line.",
+   "fieldname": "allowed_ip_ranges",
+   "fieldtype": "Small Text",
+   "label": "Allowed IP Ranges"
+  },
+  {
+   "description": "Optional URL checked by the mobile app to confirm it is on the expected network.",
+   "fieldname": "server_reachable_url",
+   "fieldtype": "Data",
+   "label": "Server Reachable URL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes_section",
+   "fieldtype": "Section Break",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "default": "0",
+   "description": "Uses the one-token-per-agent model. Keep disabled during early development/testing.",
+   "fieldname": "require_agent_token",
+   "fieldtype": "Check",
+   "label": "Require Agent Token"
+  },
+  {
+   "fieldname": "mobile_credential_section",
+   "fieldtype": "Section Break",
+   "label": "Mobile Credential Defaults"
+  },
+  {
+   "default": "480",
+   "description": "Default temporary credential duration after validating an agent token.",
+   "fieldname": "default_mobile_credential_ttl_minutes",
+   "fieldtype": "Int",
+   "label": "Default Mobile Credential TTL Minutes"
+  },
+  {
+   "default": "https",
+   "fieldname": "protocol",
+   "fieldtype": "Select",
+   "label": "Protocole",
+   "options": "https\nhttp"
+  },
+  {
+   "fieldname": "server_url",
+   "fieldtype": "Data",
+   "label": "Server Url"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-06-16 18:42:08.840976",
+ "modified_by": "Administrator",
+ "module": "Inventory Campaign",
+ "name": "Inventory Campaign Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Stock Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Inventory Campaign Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

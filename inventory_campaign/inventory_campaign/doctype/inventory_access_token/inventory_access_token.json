@@ -1,0 +1,277 @@
+{
+ "actions": [],
+ "autoname": "format:IAT-.YYYY.-.#####",
+ "creation": "2026-05-21 11:33:11.026360",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "token_section",
+  "token_hash",
+  "status",
+  "scope_section",
+  "campaign",
+  "company",
+  "warehouse",
+  "operator_column",
+  "operator_user",
+  "operator_name",
+  "validity_section",
+  "valid_from",
+  "valid_until",
+  "max_sessions",
+  "used_sessions",
+  "network_section",
+  "allowed_network_ssid",
+  "allowed_ip_range",
+  "audit_section",
+  "last_used_at",
+  "revoked_by",
+  "revoked_at",
+  "notes",
+  "token_type",
+  "inventory_agent",
+  "device_binding_section",
+  "bind_to_first_device",
+  "bound_device_id",
+  "bound_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "token_section",
+   "fieldtype": "Section Break",
+   "label": "Token"
+  },
+  {
+   "description": "Only the hash is stored. The clear token must not be stored.",
+   "fieldname": "token_hash",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Token Hash",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Active\nExpired\nRevoked\nUsed",
+   "reqd": 1
+  },
+  {
+   "fieldname": "scope_section",
+   "fieldtype": "Section Break",
+   "label": "Scope"
+  },
+  {
+   "fieldname": "campaign",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Inventory Campaign",
+   "options": "Inventory Campaign",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Warehouse",
+   "options": "Warehouse",
+   "reqd": 1
+  },
+  {
+   "fieldname": "operator_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "operator_user",
+   "fieldtype": "Link",
+   "label": "Operator User",
+   "options": "User"
+  },
+  {
+   "fieldname": "operator_name",
+   "fieldtype": "Data",
+   "label": "Operator Name"
+  },
+  {
+   "fieldname": "validity_section",
+   "fieldtype": "Section Break",
+   "label": "Validity"
+  },
+  {
+   "fieldname": "valid_from",
+   "fieldtype": "Datetime",
+   "label": "Valid From",
+   "reqd": 1
+  },
+  {
+   "fieldname": "valid_until",
+   "fieldtype": "Datetime",
+   "label": "Valid Until",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "max_sessions",
+   "fieldtype": "Int",
+   "label": "Max Sessions"
+  },
+  {
+   "default": "0",
+   "fieldname": "used_sessions",
+   "fieldtype": "Int",
+   "label": "Used Sessions",
+   "read_only": 1
+  },
+  {
+   "fieldname": "network_section",
+   "fieldtype": "Section Break",
+   "label": "Network Restriction"
+  },
+  {
+   "fieldname": "allowed_network_ssid",
+   "fieldtype": "Data",
+   "label": "Allowed Network SSID"
+  },
+  {
+   "fieldname": "allowed_ip_range",
+   "fieldtype": "Small Text",
+   "label": "Allowed IP Range"
+  },
+  {
+   "fieldname": "audit_section",
+   "fieldtype": "Section Break",
+   "label": "Audit"
+  },
+  {
+   "fieldname": "last_used_at",
+   "fieldtype": "Datetime",
+   "label": "Last Used At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revoked_by",
+   "fieldtype": "Link",
+   "label": "Revoked By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revoked_at",
+   "fieldtype": "Datetime",
+   "label": "Revoked At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "default": "Agent Campaign Access",
+   "description": "IC-S5-00: token authorizes an Inventory Agent to start local mobile sessions for a campaign.",
+   "fieldname": "token_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Token Type",
+   "options": "Agent Campaign Access\nLegacy Campaign Access"
+  },
+  {
+   "description": "Agent authorized by this token. This is not an ERPNext User.",
+   "fieldname": "inventory_agent",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Inventory Agent",
+   "options": "Inventory Agent"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "device_binding_section",
+   "fieldtype": "Section Break",
+   "label": "Device Binding"
+  },
+  {
+   "default": "1",
+   "description": "When enabled, the first valid mobile device using this token becomes the bound device.",
+   "fieldname": "bind_to_first_device",
+   "fieldtype": "Check",
+   "label": "Bind To First Device"
+  },
+  {
+   "fieldname": "bound_device_id",
+   "fieldtype": "Data",
+   "label": "Bound Device ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bound_at",
+   "fieldtype": "Datetime",
+   "label": "Bound At",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-15 19:25:16.373933",
+ "modified_by": "Administrator",
+ "module": "Inventory Campaign",
+ "name": "Inventory Access Token",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Inventory Campaign Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "operator_name",
+ "track_changes": 1
+}
