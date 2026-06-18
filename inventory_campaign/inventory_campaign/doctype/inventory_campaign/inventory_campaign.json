@@ -1,6 +1,6 @@
 {
  "actions": [],
- "autoname": "format:IC-.YYYY.-.#####",
+ "autoname": "format:IC-{YYYY}-{#####}",
  "creation": "2026-05-21 11:33:10.291375",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -198,7 +198,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-16 19:26:10.245774",
+ "modified": "2026-06-18 19:25:01.228813",
  "modified_by": "Administrator",
  "module": "Inventory Campaign",
  "name": "Inventory Campaign",
