@@ -19,16 +19,21 @@ Important MVP rules enforced here:
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
+import re
 from typing import Any
 
 import frappe
 from frappe.utils import cint, flt, get_datetime, now_datetime
+from frappe.utils.file_manager import save_file
 
 
 SUBMIT_PROTOCOL = "inventory_campaign_session_submit_v1"
 ALLOWED_SESSION_STATUSES_FOR_IDEMPOTENT_ACK = {"Submitted", "Imported", "Rejected", "Cancelled", "Failed"}
+DATA_IMAGE_PATTERN = re.compile(r"^data:(image/(?:jpeg|jpg|png|webp));base64,(.+)$", re.IGNORECASE | re.DOTALL)
+PHOTO_FIELDNAMES = ("photo_1", "photo_2", "photo_3")
 
 
 # -----------------------------------------------------------------------------
@@ -105,12 +110,35 @@ def _hash_payload(payload: dict[str, Any]) -> str:
 
 
 
+def _sanitize_photo_value_for_storage(value: Any) -> Any:
+    text = _safe_str(value)
+    if text and text.lower().startswith("data:image/"):
+        return "[mobile_photo_payload_omitted]"
+    return value
+
+
 def _sanitize_payload_for_storage(payload: dict[str, Any]) -> dict[str, Any]:
     sanitized = dict(payload or {})
     sanitized.pop("mobile_credential", None)
     sanitized.pop("agent_token", None)
     sanitized.pop("token", None)
     sanitized["protocol"] = sanitized.get("protocol") or SUBMIT_PROTOCOL
+
+    # Do not store base64 image bodies inside raw_payload_json. The photos are
+    # saved as ERPNext File records and linked back to Inventory Session Item.
+    items = []
+    for row in _as_list(sanitized.get("items")):
+        if not isinstance(row, dict):
+            items.append(row)
+            continue
+        clean_row = dict(row)
+        for fieldname in PHOTO_FIELDNAMES:
+            if fieldname in clean_row:
+                clean_row[fieldname] = _sanitize_photo_value_for_storage(clean_row.get(fieldname))
+        items.append(clean_row)
+    if "items" in sanitized:
+        sanitized["items"] = items
+
     return sanitized
 
 
@@ -220,6 +248,94 @@ def _append_terrain_note(existing_notes: str | None, location_warehouse: str | N
         parts.append(" | ".join(details))
 
     return "\n".join(parts) if parts else None
+
+
+
+
+def _photo_extension_from_mime(mime_type: str) -> str:
+    mime_type = (mime_type or "").lower()
+    if "png" in mime_type:
+        return "png"
+    if "webp" in mime_type:
+        return "webp"
+    return "jpg"
+
+
+def _normalize_photo_payload(value: Any, item_code: str, fieldname: str) -> dict[str, Any] | None:
+    text = _safe_str(value)
+    if not text:
+        return None
+
+    # Already-uploaded ERPNext file URLs are kept as they are.
+    if text.startswith("/files/") or text.startswith("/private/files/"):
+        return {"type": "url", "url": text}
+
+    match = DATA_IMAGE_PATTERN.match(text)
+    if not match:
+        # Ignore unsupported local device paths/unknown strings server-side.
+        # The Flutter client should send data:image/... payloads when files are local.
+        return None
+
+    mime_type = match.group(1).lower().replace("image/jpg", "image/jpeg")
+    raw_base64 = match.group(2).strip()
+    try:
+        content = base64.b64decode(raw_base64, validate=True)
+    except Exception:
+        frappe.throw(f"Invalid image payload for {fieldname} on item {item_code}.")
+
+    if not content:
+        return None
+
+    # Keep the payload reasonable. Mobile captures are already resized, but this
+    # protects ERPNext from accidental huge submissions.
+    max_bytes = 5 * 1024 * 1024
+    if len(content) > max_bytes:
+        frappe.throw(f"Image payload for {fieldname} on item {item_code} exceeds 5 MB.")
+
+    ext = _photo_extension_from_mime(mime_type)
+    safe_item_code = re.sub(r"[^A-Za-z0-9_.-]+", "-", item_code or "item").strip("-") or "item"
+    safe_fieldname = fieldname.replace("_", "-")
+    return {
+        "type": "content",
+        "content": content,
+        "file_name": f"inventory-{safe_item_code}-{safe_fieldname}.{ext}",
+        "mime_type": mime_type,
+    }
+
+
+def _attach_photos_to_child_rows(doc: Any, pending_photos: list[dict[str, Any]]) -> None:
+    if not pending_photos:
+        return
+
+    changed = False
+    for child, photos in zip(doc.get("items") or [], pending_photos):
+        if not photos:
+            continue
+
+        for fieldname in PHOTO_FIELDNAMES:
+            photo_payload = photos.get(fieldname)
+            if not photo_payload:
+                continue
+
+            if photo_payload.get("type") == "url":
+                setattr(child, fieldname, photo_payload.get("url"))
+                changed = True
+                continue
+
+            saved = save_file(
+                fname=photo_payload.get("file_name"),
+                content=photo_payload.get("content"),
+                dt="Inventory Session Item",
+                dn=child.name,
+                folder=None,
+                decode=False,
+                is_private=1,
+            )
+            setattr(child, fieldname, saved.file_url)
+            changed = True
+
+    if changed:
+        doc.save(ignore_permissions=True)
 
 
 # -----------------------------------------------------------------------------
@@ -344,6 +460,57 @@ def _warehouse_parent(warehouse: str | None) -> str | None:
     if not warehouse:
         return None
     return frappe.db.get_value("Warehouse", warehouse, "parent_warehouse")
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        if value in (None, ""):
+            return default
+        return flt(value)
+    except Exception:
+        return default
+
+
+def _get_bin_actual_qty(item_code: str, warehouse: str | None) -> float:
+    """Return Bin.actual_qty for an Item/Warehouse pair at submission time.
+
+    The mobile app must not send system_qty. The ERP snapshot is taken here,
+    against the real ERPNext Warehouse used as the counted location.
+    """
+
+    item_code = _safe_str(item_code)
+    warehouse = _safe_str(warehouse)
+    if not item_code or not warehouse:
+        return 0.0
+
+    actual_qty = frappe.db.get_value(
+        "Bin",
+        {"item_code": item_code, "warehouse": warehouse},
+        "actual_qty",
+    )
+    return flt(actual_qty or 0)
+
+
+def _normalize_count_quantities(raw_row: dict[str, Any]) -> tuple[float, float, float, float]:
+    """Normalize the three apparent-state quantities.
+
+    Current mobile rule:
+    - qty_usable
+    - qty_damaged
+    - qty_to_verify
+
+    ``counted_qty`` is intentionally ignored and must not be negotiated with
+    the mobile app anymore. The only accepted source of truth is the three
+    apparent-state quantities; ``total_counted_qty`` is always recalculated on
+    the server.
+    """
+
+    qty_usable = _safe_float(raw_row.get("qty_usable"))
+    qty_damaged = _safe_float(raw_row.get("qty_damaged"))
+    qty_to_verify = _safe_float(raw_row.get("qty_to_verify"))
+
+    total_counted_qty = qty_usable + qty_damaged + qty_to_verify
+    return qty_usable, qty_damaged, qty_to_verify, total_counted_qty
 
 
 # -----------------------------------------------------------------------------
@@ -545,18 +712,29 @@ def _normalize_items(
             })
             continue
 
-        try:
-            counted_qty = flt(raw_row.get("counted_qty"))
-        except Exception:
-            counted_qty = 0.0
-
-        if counted_qty < 0:
+        qty_usable, qty_damaged, qty_to_verify, total_counted_qty = _normalize_count_quantities(raw_row)
+        state_quantities = {
+            "qty_usable": qty_usable,
+            "qty_damaged": qty_damaged,
+            "qty_to_verify": qty_to_verify,
+        }
+        negative_quantities = {key: value for key, value in state_quantities.items() if value < 0}
+        if negative_quantities:
             errors.append({
                 "check": "items",
                 "row_index": index,
-                "reason": "counted_qty cannot be negative.",
+                "reason": "Quantities by apparent state cannot be negative.",
                 "item_code": item_code,
-                "counted_qty": counted_qty,
+                "quantities": negative_quantities,
+            })
+            continue
+
+        if total_counted_qty <= 0:
+            errors.append({
+                "check": "items",
+                "row_index": index,
+                "reason": "At least one counted quantity must be greater than zero.",
+                "item_code": item_code,
             })
             continue
 
@@ -585,6 +763,19 @@ def _normalize_items(
         safe_row_parent = _safe_warehouse_field_value("Inventory Session Item", "parent_warehouse", row_parent)
         safe_row_location = _safe_warehouse_field_value("Inventory Session Item", "location_warehouse", row_location)
 
+        if not safe_row_location:
+            errors.append({
+                "check": "items",
+                "row_index": index,
+                "reason": "location_warehouse must resolve to an ERPNext Warehouse to calculate system_qty from Bin.",
+                "item_code": item_code,
+                "location_warehouse": row_location,
+            })
+            continue
+
+        system_qty = _get_bin_actual_qty(item_doc.name, safe_row_location)
+        difference_qty = total_counted_qty - system_qty
+
         recoding_tags = _extract_item_recoding_tags(raw_row)
         recoding = _normalize_recoding_tags(recoding_tags)
         if not recoding.get("valid"):
@@ -601,14 +792,19 @@ def _normalize_items(
             recoding_count += 1
 
         summary = recoding.get("summary") or {}
-        total_qty += counted_qty
+        total_qty += total_counted_qty
 
         normalized_rows.append({
             "item_code": item_doc.name,
             "item_name": _safe_str(raw_row.get("item_name")) or item_doc.item_name,
             "barcode": _safe_str(raw_row.get("barcode") or raw_row.get("scan_code")),
             "uom": _safe_str(raw_row.get("uom")) or item_doc.stock_uom,
-            "counted_qty": counted_qty,
+            "qty_usable": qty_usable,
+            "qty_damaged": qty_damaged,
+            "qty_to_verify": qty_to_verify,
+            "total_counted_qty": total_counted_qty,
+            "system_qty": system_qty,
+            "difference_qty": difference_qty,
             "scan_count": _safe_int(raw_row.get("scan_count"), 1),
             "last_scanned_at": raw_row.get("last_scanned_at"),
             "manual_entry": cint(raw_row.get("manual_entry") or 0),
@@ -617,6 +813,11 @@ def _normalize_items(
             "rayon": row_rayon,
             "zone": row_rayon,
             "mobile_line_id": _safe_str(raw_row.get("mobile_line_id") or raw_row.get("line_id")),
+            "__photos": {
+                fieldname: _normalize_photo_payload(raw_row.get(fieldname), item_doc.name, fieldname)
+                for fieldname in PHOTO_FIELDNAMES
+                if raw_row.get(fieldname)
+            },
             "recoding_required": 1 if recoding_required else 0,
             "recoding_status": recoding.get("recoding_status") or ("Pending Review" if recoding_required else "Not Required"),
             "recoding_tags_json": recoding.get("recoding_tags_json") if recoding_required else "{}",
@@ -801,10 +1002,22 @@ def _create_inventory_session_doc(
     for location_row in normalized_locations:
         doc.append("locations", location_row)
 
+    pending_photos: list[dict[str, Any]] = []
     for item_row in normalized_items:
-        doc.append("items", item_row)
+        clean_item_row = dict(item_row)
+        pending_photos.append(clean_item_row.pop("__photos", {}) or {})
+        doc.append("items", clean_item_row)
 
     doc.insert(ignore_permissions=True)
+    _attach_photos_to_child_rows(doc, pending_photos)
+
+    if not cint(getattr(doc, "docstatus", 0)):
+        if not cint(getattr(doc.meta, "is_submittable", 0)):
+            frappe.throw("Inventory Session must be submittable to accept mobile submissions.")
+
+        doc.flags.ignore_permissions = True
+        doc.submit()
+
     return doc
 
 
