@@ -198,7 +198,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-18 19:25:01.228813",
+ "modified": "2026-06-19 10:58:43.712701",
  "modified_by": "Administrator",
  "module": "Inventory Campaign",
  "name": "Inventory Campaign",
@@ -214,7 +214,9 @@
    "read": 1,
    "report": 1,
    "role": "System Manager",
+   "select": 1,
    "share": 1,
+   "submit": 1,
    "write": 1
   },
   {
@@ -226,7 +228,9 @@
    "read": 1,
    "report": 1,
    "role": "Stock Manager",
+   "select": 1,
    "share": 1,
+   "submit": 1,
    "write": 1
   },
   {
@@ -238,14 +242,17 @@
    "read": 1,
    "report": 1,
    "role": "Inventory Campaign Manager",
+   "select": 1,
    "share": 1,
+   "submit": 1,
    "write": 1
   },
   {
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Stock User"
+   "role": "Stock User",
+   "select": 1
   }
  ],
  "row_format": "Dynamic",

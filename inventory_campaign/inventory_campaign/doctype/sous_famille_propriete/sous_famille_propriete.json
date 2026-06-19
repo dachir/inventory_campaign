@@ -1,5 +1,6 @@
 {
  "actions": [],
+ "allow_import": 1,
  "allow_rename": 1,
  "creation": "2026-06-14 20:58:41.937031",
  "doctype": "DocType",
@@ -99,7 +100,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-14 20:58:41.937031",
+ "modified": "2026-06-19 10:46:06.992279",
  "modified_by": "Administrator",
  "module": "Inventory Campaign",
  "name": "Sous Famille Propriete",

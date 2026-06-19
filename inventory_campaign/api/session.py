@@ -29,6 +29,8 @@ import frappe
 from frappe.utils import cint, flt, get_datetime, now_datetime
 from frappe.utils.file_manager import save_file
 
+from inventory_campaign.api.error_reporting import error_response
+
 
 SUBMIT_PROTOCOL = "inventory_campaign_session_submit_v1"
 ALLOWED_SESSION_STATUSES_FOR_IDEMPOTENT_ACK = {"Submitted", "Imported", "Rejected", "Cancelled", "Failed"}
@@ -144,11 +146,48 @@ def _sanitize_payload_for_storage(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _error(reason: str, **extra: Any) -> dict[str, Any]:
+    """Backward-compatible mobile error envelope.
+
+    Existing callers may still pass only a reason. New callers should pass
+    error_code/error_stage and log=True to write a structured ERPNext error log.
+    """
+
+    should_log = bool(extra.pop("log", False))
+    error_code = extra.pop("error_code", None) or "INVENTORY_SESSION_ERROR"
+    error_stage = extra.pop("error_stage", None) or "submit_inventory_session"
+    technical_message = extra.pop("technical_message", None)
+    details = extra.pop("details", None)
+    payload = extra.pop("payload", None)
+    traceback = extra.pop("traceback", None)
+
+    if should_log:
+        return error_response(
+            reason,
+            error_code=error_code,
+            error_stage=error_stage,
+            error_type=extra.pop("error_type", "SESSION_SUBMIT_ERROR"),
+            log=True,
+            technical_message=technical_message,
+            details=details,
+            payload=payload,
+            traceback=traceback,
+            **extra,
+        )
+
     response = {
         "ok": False,
         "submitted": False,
         "ack": False,
+        "mobile_can_purge": False,
+        "error": True,
+        "error_id": None,
+        "error_code": error_code,
+        "error_stage": error_stage,
         "reason": reason,
+        "agent_message": reason,
+        "technical_message": technical_message,
+        "details": details,
+        "next_step": "keep_mobile_session_and_retry",
     }
     response.update(extra)
     return response
@@ -1043,7 +1082,15 @@ def submit_inventory_session(
     try:
         incoming_payload = _coerce_payload(payload=payload, kwargs=kwargs)
     except Exception as exc:
-        return _error(str(exc))
+        return _error(
+            "ERPNext n’a pas pu lire les données envoyées par le mobile.",
+            log=True,
+            error_code="PAYLOAD_PARSE_FAILED",
+            error_stage="payload_parse",
+            technical_message=str(exc),
+            payload={"payload": payload, "kwargs": kwargs},
+            traceback=frappe.get_traceback(),
+        )
 
     mobile_credential = _safe_str(mobile_credential) or _safe_str(incoming_payload.get("mobile_credential"))
     campaign = _safe_str(incoming_payload.get("campaign"))
@@ -1051,13 +1098,38 @@ def submit_inventory_session(
     device_id = _safe_str(incoming_payload.get("device_id"))
 
     if not mobile_session_id:
-        return _error("mobile_session_id is required.")
+        return _error(
+            "Identifiant de session mobile manquant. Fermez et rouvrez la session puis réessayez.",
+            log=True,
+            error_code="MOBILE_SESSION_ID_MISSING",
+            error_stage="payload_validation",
+            campaign=campaign,
+            device_id=device_id,
+            payload=incoming_payload,
+        )
 
     if not campaign:
-        return _error("campaign is required.")
+        return _error(
+            "Campagne ERPNext manquante dans la session mobile.",
+            log=True,
+            error_code="CAMPAIGN_MISSING",
+            error_stage="payload_validation",
+            mobile_session_id=mobile_session_id,
+            device_id=device_id,
+            payload=incoming_payload,
+        )
 
     if not mobile_credential:
-        return _error("mobile_credential is required.")
+        return _error(
+            "Credential mobile manquant. L’agent doit rescanner le QR de connexion.",
+            log=True,
+            error_code="MOBILE_CREDENTIAL_MISSING",
+            error_stage="credential_validation",
+            campaign=campaign,
+            mobile_session_id=mobile_session_id,
+            device_id=device_id,
+            payload=incoming_payload,
+        )
 
     sanitized_payload = _sanitize_payload_for_storage(incoming_payload)
     payload_hash = _hash_payload(sanitized_payload)
@@ -1067,10 +1139,20 @@ def submit_inventory_session(
         existing_hash = _safe_str(existing.get("submit_payload_hash"))
         if existing_hash and existing_hash != payload_hash:
             return _error(
-                "mobile_session_id already exists with a different payload hash.",
+                "Cette session mobile existe déjà dans ERPNext avec un contenu différent. Ne purgez pas le téléphone et contactez le support.",
+                log=True,
+                error_code="MOBILE_SESSION_DUPLICATE_CONFLICT",
+                error_stage="idempotency_check",
+                campaign=campaign,
+                mobile_session_id=mobile_session_id,
+                device_id=device_id,
+                payload=sanitized_payload,
+                details={
+                    "existing_inventory_session": existing.get("name"),
+                    "existing_status": existing.get("status"),
+                },
                 conflict=True,
                 duplicate=True,
-                mobile_session_id=mobile_session_id,
                 existing_inventory_session=existing.get("name"),
                 existing_status=existing.get("status"),
             )
@@ -1098,7 +1180,18 @@ def submit_inventory_session(
         device_id=device_id,
     )
     if not verification.get("valid"):
-        return _error(verification.get("reason") or "Mobile credential is invalid.", valid=False)
+        return _error(
+            "Credential mobile refusé par ERPNext. L’agent doit rescanner le QR de connexion.",
+            log=True,
+            error_code="MOBILE_CREDENTIAL_INVALID",
+            error_stage="credential_validation",
+            technical_message=verification.get("reason") or "Mobile credential is invalid.",
+            campaign=campaign,
+            mobile_session_id=mobile_session_id,
+            device_id=device_id,
+            payload=sanitized_payload,
+            valid=False,
+        )
 
     context = _get_mobile_context(
         mobile_credential=mobile_credential,
@@ -1106,23 +1199,63 @@ def submit_inventory_session(
         device_id=device_id,
     )
     if not context.get("ok") or not context.get("access_allowed"):
-        return _error(context.get("reason") or "Inventory Agent context is not allowed.", valid=False)
+        return _error(
+            "Accès agent refusé par ERPNext. Vérifiez le statut agent, les groupes d’articles et les magasins autorisés.",
+            log=True,
+            error_code="AGENT_CONTEXT_DENIED",
+            error_stage="agent_context_validation",
+            technical_message=context.get("reason") or "Inventory Agent context is not allowed.",
+            campaign=campaign,
+            mobile_session_id=mobile_session_id,
+            device_id=device_id,
+            payload=sanitized_payload,
+            details=context,
+            valid=False,
+        )
 
     campaign_context = _campaign_from_context(context, campaign)
 
     campaign_doc = _get_campaign_doc(campaign)
     if not campaign_doc:
-        return _error("Inventory Campaign does not exist.", campaign=campaign)
+        return _error(
+            "La campagne d’inventaire n’existe pas dans ERPNext.",
+            log=True,
+            error_code="CAMPAIGN_NOT_FOUND",
+            error_stage="campaign_validation",
+            campaign=campaign,
+            mobile_session_id=mobile_session_id,
+            device_id=device_id,
+            payload=sanitized_payload,
+        )
 
     if campaign_doc.status not in {"Draft", "Open"}:
-        return _error("Inventory Campaign must be Draft or Open to accept mobile submissions.", campaign=campaign, status=campaign_doc.status)
+        return _error(
+            "La campagne ERPNext n’est pas ouverte. La session mobile ne peut pas être reçue.",
+            log=True,
+            error_code="CAMPAIGN_NOT_OPEN",
+            error_stage="campaign_validation",
+            campaign=campaign,
+            mobile_session_id=mobile_session_id,
+            device_id=device_id,
+            payload=sanitized_payload,
+            details={"campaign_status": campaign_doc.status},
+            status=campaign_doc.status,
+        )
 
     agent_ctx = context.get("inventory_agent") or {}
     agent_company = _safe_str(agent_ctx.get("company"))
     if agent_company and campaign_doc.company != agent_company:
         return _error(
-            "Inventory Campaign company does not match the Inventory Agent company.",
+            "La société de la campagne ne correspond pas à la société de l’agent.",
+            log=True,
+            error_code="COMPANY_MISMATCH",
+            error_stage="agent_campaign_validation",
             campaign=campaign,
+            inventory_agent=_safe_str(agent_ctx.get("name")) or _safe_str(agent_ctx.get("inventory_agent")),
+            mobile_session_id=mobile_session_id,
+            device_id=device_id,
+            payload=sanitized_payload,
+            details={"campaign_company": campaign_doc.company, "agent_company": agent_company},
             campaign_company=campaign_doc.company,
             agent_company=agent_company,
         )
@@ -1131,8 +1264,15 @@ def submit_inventory_session(
     campaign_branch = _safe_str(getattr(campaign_doc, "branch", None)) if _has_field("Inventory Campaign", "branch") else None
     if incoming_branch and campaign_branch and incoming_branch != campaign_branch:
         return _error(
-            "Inventory Campaign branch does not match the selected mobile branch.",
+            "Le site sélectionné sur le mobile ne correspond pas au site de la campagne ERPNext.",
+            log=True,
+            error_code="BRANCH_MISMATCH",
+            error_stage="branch_validation",
             campaign=campaign,
+            mobile_session_id=mobile_session_id,
+            device_id=device_id,
+            payload=sanitized_payload,
+            details={"campaign_branch": campaign_branch, "selected_branch": incoming_branch},
             campaign_branch=campaign_branch,
             selected_branch=incoming_branch,
         )
@@ -1142,12 +1282,30 @@ def submit_inventory_session(
     authorized_locations = _authorized_location_codes(context)
 
     if not authorized_item_groups and not authorized_items:
-        return _error("Inventory Agent has no Authorized Item Groups.")
+        return _error(
+            "L’agent n’a aucun groupe d’articles autorisé. Impossible de recevoir la session.",
+            log=True,
+            error_code="AGENT_SCOPE_EMPTY",
+            error_stage="agent_scope_validation",
+            campaign=campaign,
+            mobile_session_id=mobile_session_id,
+            device_id=device_id,
+            payload=sanitized_payload,
+            details={"authorized_item_groups": authorized_item_groups, "authorized_items": authorized_items},
+        )
 
     parent_warehouse = _safe_str(incoming_payload.get("parent_warehouse")) or campaign_doc.warehouse
     if parent_warehouse != campaign_doc.warehouse:
         return _error(
-            "parent_warehouse must match the Inventory Campaign warehouse.",
+            "Le magasin de la session mobile ne correspond pas au magasin de la campagne ERPNext.",
+            log=True,
+            error_code="WAREHOUSE_MISMATCH",
+            error_stage="warehouse_validation",
+            campaign=campaign,
+            mobile_session_id=mobile_session_id,
+            device_id=device_id,
+            payload=sanitized_payload,
+            details={"parent_warehouse": parent_warehouse, "campaign_warehouse": campaign_doc.warehouse},
             parent_warehouse=parent_warehouse,
             campaign_warehouse=campaign_doc.warehouse,
         )
@@ -1182,10 +1340,30 @@ def submit_inventory_session(
 
     errors = location_errors + item_errors
     if errors:
-        return _error("Inventory Session payload validation failed.", errors=errors)
+        return _error(
+            "ERPNext a refusé certaines lignes de la session. Vérifiez les articles, rayons et magasins autorisés.",
+            log=True,
+            error_code="SESSION_PAYLOAD_VALIDATION_FAILED",
+            error_stage="line_validation",
+            campaign=campaign,
+            mobile_session_id=mobile_session_id,
+            device_id=device_id,
+            payload=sanitized_payload,
+            details=errors,
+            errors=errors,
+        )
 
     if not normalized_items and not unplanned_items and not unplanned_warehouses:
-        return _error("Inventory Session must contain at least one counted item or one unplanned field discovery.")
+        return _error(
+            "La session ne contient aucune ligne comptée. Elle n’a pas été créée dans ERPNext.",
+            log=True,
+            error_code="EMPTY_SESSION",
+            error_stage="payload_validation",
+            campaign=campaign,
+            mobile_session_id=mobile_session_id,
+            device_id=device_id,
+            payload=sanitized_payload,
+        )
 
     try:
         doc = _create_inventory_session_doc(
@@ -1228,12 +1406,18 @@ def submit_inventory_session(
             }
 
         frappe.db.rollback()
-        frappe.log_error(
-            title="Inventory Campaign - submit_inventory_session_failed",
-            message=frappe.get_traceback(),
-        )
         return _error(
-            "Inventory Session could not be created because of a server error.",
+            "ERPNext n’a pas pu créer la session d’inventaire. La session reste sur le téléphone.",
+            log=True,
+            error_code="SESSION_CREATE_FAILED",
+            error_stage="session_insert_or_submit",
+            campaign=campaign,
+            inventory_agent=_safe_str((context.get("inventory_agent") or {}).get("name")) or _safe_str((context.get("inventory_agent") or {}).get("inventory_agent")),
+            mobile_session_id=mobile_session_id,
+            device_id=device_id,
+            payload=sanitized_payload,
+            technical_message=str(exc),
+            traceback=frappe.get_traceback(),
             exception=str(exc),
             mobile_can_purge=False,
         )
