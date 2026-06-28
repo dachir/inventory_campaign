@@ -30,6 +30,10 @@ from frappe.utils import cint, flt, get_datetime, now_datetime
 from frappe.utils.file_manager import save_file
 
 from inventory_campaign.api.error_reporting import error_response
+from inventory_campaign.utils.quality_stock import (
+    get_quality_status_stock_snapshot,
+    get_system_qty_from_snapshot,
+)
 
 
 SUBMIT_PROTOCOL = "inventory_campaign_session_submit_v1"
@@ -510,24 +514,14 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
-def _get_bin_actual_qty(item_code: str, warehouse: str | None) -> float:
-    """Return Bin.actual_qty for an Item/Warehouse pair at submission time.
+def _get_system_stock_snapshot(item_code: str, warehouse: str, snapshot_datetime: Any) -> dict[str, Any]:
+    """Return compact ERP stock snapshot from Stock Ledger Entry by quality_status."""
 
-    The mobile app must not send system_qty. The ERP snapshot is taken here,
-    against the real ERPNext Warehouse used as the counted location.
-    """
-
-    item_code = _safe_str(item_code)
-    warehouse = _safe_str(warehouse)
-    if not item_code or not warehouse:
-        return 0.0
-
-    actual_qty = frappe.db.get_value(
-        "Bin",
-        {"item_code": item_code, "warehouse": warehouse},
-        "actual_qty",
+    return get_quality_status_stock_snapshot(
+        item_code=item_code,
+        warehouse=warehouse,
+        snapshot_datetime=snapshot_datetime,
     )
-    return flt(actual_qty or 0)
 
 
 def _normalize_count_quantities(raw_row: dict[str, Any]) -> tuple[float, float, float, float]:
@@ -691,6 +685,7 @@ def _normalize_items(
     normalized_rows: list[dict[str, Any]] = []
     total_qty = 0.0
     recoding_count = 0
+    stock_snapshot_at = now_datetime()
 
     for index, raw_row in enumerate(_as_list(payload.get("items")), start=1):
         if not isinstance(raw_row, dict):
@@ -806,14 +801,31 @@ def _normalize_items(
             errors.append({
                 "check": "items",
                 "row_index": index,
-                "reason": "location_warehouse must resolve to an ERPNext Warehouse to calculate system_qty from Bin.",
+                "reason": "location_warehouse must resolve to an ERPNext Warehouse to calculate system_qty from Stock Ledger Entry.",
                 "item_code": item_code,
                 "location_warehouse": row_location,
             })
             continue
 
-        system_qty = _get_bin_actual_qty(item_doc.name, safe_row_location)
-        difference_qty = total_counted_qty - system_qty
+        try:
+            system_stock_snapshot = _get_system_stock_snapshot(
+                item_code=item_doc.name,
+                warehouse=safe_row_location,
+                snapshot_datetime=stock_snapshot_at,
+            )
+            row_quality_status = _safe_str(raw_row.get("quality_status"))
+            system_qty = get_system_qty_from_snapshot(system_stock_snapshot, row_quality_status)
+            difference_qty = total_counted_qty - system_qty
+        except Exception as exc:
+            errors.append({
+                "check": "system_stock",
+                "row_index": index,
+                "reason": "ERPNext could not calculate system stock by quality_status from Stock Ledger Entry.",
+                "item_code": item_code,
+                "location_warehouse": safe_row_location,
+                "technical_message": str(exc),
+            })
+            continue
 
         recoding_tags = _extract_item_recoding_tags(raw_row)
         recoding = _normalize_recoding_tags(recoding_tags)
@@ -844,6 +856,7 @@ def _normalize_items(
             "total_counted_qty": total_counted_qty,
             "system_qty": system_qty,
             "difference_qty": difference_qty,
+            "system_stock_json": _json_dumps(system_stock_snapshot),
             "scan_count": _safe_int(raw_row.get("scan_count"), 1),
             "last_scanned_at": raw_row.get("last_scanned_at"),
             "manual_entry": cint(raw_row.get("manual_entry") or 0),

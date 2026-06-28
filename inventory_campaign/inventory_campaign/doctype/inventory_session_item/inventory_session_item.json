@@ -25,6 +25,7 @@
   "location_section",
   "system_qty",
   "difference_qty",
+  "system_stock_json",
   "recoding_section",
   "recoding_required",
   "recoding_status",
@@ -250,13 +251,18 @@
    "fieldname": "difference_qty",
    "fieldtype": "Float",
    "label": "Difference Qty"
+  },
+  {
+   "fieldname": "system_stock_json",
+   "fieldtype": "Long Text",
+   "label": "Detail System Stock"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-06-18 12:39:43.864124",
+ "modified": "2026-06-27 11:15:15.066448",
  "modified_by": "Administrator",
  "module": "Inventory Campaign",
  "name": "Inventory Session Item",
