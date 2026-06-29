@@ -33,6 +33,7 @@ from inventory_campaign.api.error_reporting import error_response
 from inventory_campaign.utils.quality_stock import (
     get_quality_status_stock_snapshot,
     get_system_qty_from_snapshot,
+    is_warehouse_descendant_or_self,
 )
 
 
@@ -514,13 +515,22 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
-def _get_system_stock_snapshot(item_code: str, warehouse: str, snapshot_datetime: Any) -> dict[str, Any]:
-    """Return compact ERP stock snapshot from Stock Ledger Entry by quality_status."""
+def _get_system_stock_snapshot(
+    item_code: str,
+    snapshot_datetime: Any,
+    warehouse_scope: str,
+) -> list[dict[str, Any]]:
+    """Return compact ERP stock snapshot inside the session warehouse tree.
+
+    The counted line location is kept on Inventory Session Item.location_warehouse,
+    but it is not used as the stock filter. The stock filter is the session/
+    campaign warehouse tree: the root warehouse itself plus all descendants.
+    """
 
     return get_quality_status_stock_snapshot(
         item_code=item_code,
-        warehouse=warehouse,
         snapshot_datetime=snapshot_datetime,
+        warehouse_scope=warehouse_scope,
     )
 
 
@@ -801,17 +811,28 @@ def _normalize_items(
             errors.append({
                 "check": "items",
                 "row_index": index,
-                "reason": "location_warehouse must resolve to an ERPNext Warehouse to calculate system_qty from Stock Ledger Entry.",
+                "reason": "location_warehouse must resolve to an ERPNext Warehouse to store the counted line location.",
                 "item_code": item_code,
                 "location_warehouse": row_location,
+            })
+            continue
+
+        if not is_warehouse_descendant_or_self(safe_row_location, parent_warehouse):
+            errors.append({
+                "check": "items",
+                "row_index": index,
+                "reason": "location_warehouse must be inside the session warehouse tree.",
+                "item_code": item_code,
+                "location_warehouse": safe_row_location,
+                "session_warehouse": parent_warehouse,
             })
             continue
 
         try:
             system_stock_snapshot = _get_system_stock_snapshot(
                 item_code=item_doc.name,
-                warehouse=safe_row_location,
                 snapshot_datetime=stock_snapshot_at,
+                warehouse_scope=parent_warehouse,
             )
             row_quality_status = _safe_str(raw_row.get("quality_status"))
             system_qty = get_system_qty_from_snapshot(system_stock_snapshot, row_quality_status)
@@ -820,9 +841,10 @@ def _normalize_items(
             errors.append({
                 "check": "system_stock",
                 "row_index": index,
-                "reason": "ERPNext could not calculate system stock by quality_status from Stock Ledger Entry.",
+                "reason": "ERPNext could not calculate item stock by warehouse and quality_status from Stock Ledger Entry.",
                 "item_code": item_code,
-                "location_warehouse": safe_row_location,
+                "counted_location_warehouse": safe_row_location,
+                "warehouse_scope": parent_warehouse,
                 "technical_message": str(exc),
             })
             continue
