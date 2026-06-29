@@ -1797,3 +1797,4 @@ def enforce_or_audit_security(
         frappe.throw(reason_text or "Inventory Campaign security check failed.")
 
     return result
+
