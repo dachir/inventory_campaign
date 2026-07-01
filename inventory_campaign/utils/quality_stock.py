@@ -317,7 +317,8 @@ def get_counted_qty_from_row(row: Any) -> float:
     qty_usable = flt(getattr(row, "qty_usable", 0) or 0)
     qty_damaged = flt(getattr(row, "qty_damaged", 0) or 0)
     qty_to_verify = flt(getattr(row, "qty_to_verify", 0) or 0)
-    apparent_state_total = qty_usable + qty_damaged + qty_to_verify
+    qty_obsolete = flt(getattr(row, "qty_obsolete", 0) or 0)
+    apparent_state_total = qty_usable + qty_damaged + qty_to_verify + qty_obsolete
 
     if apparent_state_total:
         return flt(apparent_state_total)

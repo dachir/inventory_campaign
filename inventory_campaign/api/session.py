@@ -534,26 +534,27 @@ def _get_system_stock_snapshot(
     )
 
 
-def _normalize_count_quantities(raw_row: dict[str, Any]) -> tuple[float, float, float, float]:
-    """Normalize the three apparent-state quantities.
+def _normalize_count_quantities(raw_row: dict[str, Any]) -> tuple[float, float, float, float, float]:
+    """Normalize the apparent-state quantities.
 
     Current mobile rule:
     - qty_usable
     - qty_damaged
     - qty_to_verify
+    - qty_obsolete
 
     ``counted_qty`` is intentionally ignored and must not be negotiated with
-    the mobile app anymore. The only accepted source of truth is the three
-    apparent-state quantities; ``total_counted_qty`` is always recalculated on
-    the server.
+    the mobile app anymore. The only accepted source of truth is the apparent
+    state quantities; ``total_counted_qty`` is always recalculated on the server.
     """
 
     qty_usable = _safe_float(raw_row.get("qty_usable"))
     qty_damaged = _safe_float(raw_row.get("qty_damaged"))
     qty_to_verify = _safe_float(raw_row.get("qty_to_verify"))
+    qty_obsolete = _safe_float(raw_row.get("qty_obsolete"))
 
-    total_counted_qty = qty_usable + qty_damaged + qty_to_verify
-    return qty_usable, qty_damaged, qty_to_verify, total_counted_qty
+    total_counted_qty = qty_usable + qty_damaged + qty_to_verify + qty_obsolete
+    return qty_usable, qty_damaged, qty_to_verify, qty_obsolete, total_counted_qty
 
 
 # -----------------------------------------------------------------------------
@@ -756,11 +757,12 @@ def _normalize_items(
             })
             continue
 
-        qty_usable, qty_damaged, qty_to_verify, total_counted_qty = _normalize_count_quantities(raw_row)
+        qty_usable, qty_damaged, qty_to_verify, qty_obsolete, total_counted_qty = _normalize_count_quantities(raw_row)
         state_quantities = {
             "qty_usable": qty_usable,
             "qty_damaged": qty_damaged,
             "qty_to_verify": qty_to_verify,
+            "qty_obsolete": qty_obsolete,
         }
         negative_quantities = {key: value for key, value in state_quantities.items() if value < 0}
         if negative_quantities:
@@ -875,7 +877,9 @@ def _normalize_items(
             "qty_usable": qty_usable,
             "qty_damaged": qty_damaged,
             "qty_to_verify": qty_to_verify,
+            "qty_obsolete": qty_obsolete,
             "total_counted_qty": total_counted_qty,
+            "counted_qty": total_counted_qty,
             "system_qty": system_qty,
             "difference_qty": difference_qty,
             "system_stock_json": _json_dumps(system_stock_snapshot),
@@ -902,7 +906,7 @@ def _normalize_items(
             "recoding_caracteristique_majeure_code": summary.get("caracteristique_majeure_code"),
             "recoding_caracteristique_majeure": summary.get("caracteristique_majeure"),
             "recoding_note": _safe_str(raw_row.get("recoding_note")),
-            "notes": _safe_str(raw_row.get("notes")),
+            "notes": _safe_str(raw_row.get("notes") or raw_row.get("note") or raw_row.get("comment")),
         })
 
         if item_doc.disabled:
