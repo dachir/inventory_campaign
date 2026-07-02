@@ -888,6 +888,100 @@ def _get_latest_modified(doctype: str) -> str | None:
     return None
 
 
+
+def _get_existing_fields(doctype: str, candidates: list[str]) -> list[str]:
+    if not _has_doctype(doctype):
+        return []
+    return [fieldname for fieldname in candidates if _has_field(doctype, fieldname)]
+
+
+def _first_non_empty(row: dict[str, Any], candidates: list[str]) -> str | None:
+    for fieldname in candidates:
+        value = _safe_str(row.get(fieldname))
+        if value:
+            return value
+    return None
+
+
+def _get_plant_machine_referential() -> dict[str, Any]:
+    """Return standard ERPNext Plant Floor / Workstation lists for mobile tags.
+
+    These are not part of the spare-part code. They are usage/context tags that
+    allow the mobile agent to indicate where the part is used.
+    """
+
+    plant_floors: list[dict[str, Any]] = []
+    workstations: list[dict[str, Any]] = []
+
+    if _has_doctype("Plant Floor"):
+        plant_label_fields = _get_existing_fields(
+            "Plant Floor",
+            ["plant_floor_name", "title", "description"],
+        )
+        plant_fields = ["name", *plant_label_fields]
+        for row in frappe.get_all("Plant Floor", fields=plant_fields, order_by="name asc"):
+            name = row.get("name")
+            label = _first_non_empty(row, plant_label_fields) or name
+            plant_floors.append({
+                "name": name,
+                "code": name,
+                "description": label,
+                "label": label,
+            })
+
+    if _has_doctype("Workstation"):
+        workstation_label_fields = _get_existing_fields(
+            "Workstation",
+            ["workstation_name", "title", "description"],
+        )
+        workstation_parent_fields = _get_existing_fields(
+            "Workstation",
+            ["plant_floor"],
+        )
+        workstation_flag_fields = _get_existing_fields(
+            "Workstation",
+            ["disabled", "is_disabled"],
+        )
+        workstation_fields = [
+            "name",
+            *workstation_label_fields,
+            *workstation_parent_fields,
+            *workstation_flag_fields,
+        ]
+        for row in frappe.get_all("Workstation", fields=workstation_fields, order_by="name asc"):
+            if any(cint(row.get(fieldname)) for fieldname in workstation_flag_fields):
+                continue
+            name = row.get("name")
+            label = _first_non_empty(row, workstation_label_fields) or name
+            plant_floor = _first_non_empty(row, workstation_parent_fields)
+            workstations.append({
+                "name": name,
+                "code": name,
+                "description": label,
+                "label": label,
+                "parent_code": plant_floor,
+                "plant_floor": plant_floor,
+            })
+
+    version_parts = [
+        _get_latest_modified("Plant Floor"),
+        _get_latest_modified("Workstation"),
+    ]
+    version = max([part for part in version_parts if part] or [now_datetime().isoformat()])
+    data = {
+        "plant_floors": plant_floors,
+        "plants": plant_floors,
+        "workstations": workstations,
+        "machines": workstations,
+        "version": version,
+    }
+    data["hash"] = hashlib.sha256(_json_dumps({
+        "plant_floors": plant_floors,
+        "workstations": workstations,
+    }).encode("utf-8")).hexdigest()
+    return data
+
+
 def _get_codification_referential() -> dict[str, Any]:
     families: list[dict[str, Any]] = []
     sub_families: list[dict[str, Any]] = []
@@ -964,11 +1058,16 @@ def _get_codification_referential() -> dict[str, Any]:
                 "statut": row.get("statut"),
             })
 
+    plant_machine_referential = _get_plant_machine_referential()
+    plant_floors = plant_machine_referential.get("plant_floors") or []
+    workstations = plant_machine_referential.get("workstations") or []
+
     version_parts = [
         _get_latest_modified("Famille"),
         _get_latest_modified("Sous Famille"),
         _get_latest_modified("Propriete"),
         _get_latest_modified("Sous Famille Propriete"),
+        plant_machine_referential.get("version"),
     ]
     version = max([part for part in version_parts if part] or [now_datetime().isoformat()])
 
@@ -981,6 +1080,10 @@ def _get_codification_referential() -> dict[str, Any]:
         "proprietes": properties,
         "sub_family_properties": sub_family_properties,
         "sous_famille_proprietes": sub_family_properties,
+        "plant_floors": plant_floors,
+        "plants": plant_floors,
+        "workstations": workstations,
+        "machines": workstations,
         "version": version,
     }
     data["hash"] = hashlib.sha256(_json_dumps({
@@ -988,6 +1091,8 @@ def _get_codification_referential() -> dict[str, Any]:
         "sub_families": sub_families,
         "properties": properties,
         "sub_family_properties": sub_family_properties,
+        "plant_floors": plant_floors,
+        "workstations": workstations,
     }).encode("utf-8")).hexdigest()
     return data
 
@@ -1409,6 +1514,14 @@ def _build_mobile_context(agent_doc: Any, campaign: str | None = None) -> dict[s
                 break
 
     codification_referential = _get_codification_referential()
+    plant_machine_referential = {
+        "plant_floors": codification_referential.get("plant_floors") or [],
+        "plants": codification_referential.get("plants") or [],
+        "workstations": codification_referential.get("workstations") or [],
+        "machines": codification_referential.get("machines") or [],
+        "version": codification_referential.get("version"),
+        "hash": codification_referential.get("hash"),
+    }
 
     return {
         "inventory_agent": _get_agent_context(agent_doc),
@@ -1425,6 +1538,8 @@ def _build_mobile_context(agent_doc: Any, campaign: str | None = None) -> dict[s
         "authorized_item_count": authorized_item_count,
         "item_validation_mode": "online_per_scan",
         "codification_referential": codification_referential,
+        "plant_machine_referential": plant_machine_referential,
+        "technical_context_referential": plant_machine_referential,
         "referential_version": codification_referential.get("version"),
         "referential_hash": codification_referential.get("hash"),
         "recoding": _get_recoding_mobile_config(),
@@ -1438,7 +1553,9 @@ def _build_mobile_context(agent_doc: Any, campaign: str | None = None) -> dict[s
             "unplanned_warehouses_storage": "Inventory Session.unplanned_warehouses_json",
             "recoding_storage": "Inventory Session Item.recoding_tags_json",
             "recoding_is_optional": True,
-            "external_agents_define_only_famille_and_sous_famille": True,
+            "external_agents_define_famille_sous_famille_caracteristiques_plant_machine": True,
+            "plant_machine_are_usage_context_not_item_code": True,
+            "external_agents_define_only_famille_and_sous_famille": False,
             "mobile_uses_controlled_codification_lists": True,
             "mobile_creates_master_data": False,
             "auto_create_item": False,

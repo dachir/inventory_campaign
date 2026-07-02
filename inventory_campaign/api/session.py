@@ -905,6 +905,10 @@ def _normalize_items(
             "recoding_sous_famille_description": summary.get("sous_famille_description"),
             "recoding_caracteristique_majeure_code": summary.get("caracteristique_majeure_code"),
             "recoding_caracteristique_majeure": summary.get("caracteristique_majeure"),
+            "recoding_plant_floor": summary.get("plant_floor"),
+            "recoding_plant_floor_description": summary.get("plant_floor_description"),
+            "recoding_workstation": summary.get("workstation"),
+            "recoding_workstation_description": summary.get("workstation_description"),
             "recoding_note": _safe_str(raw_row.get("recoding_note")),
             "notes": _safe_str(raw_row.get("notes") or raw_row.get("note") or raw_row.get("comment")),
         })

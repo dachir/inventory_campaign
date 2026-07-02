@@ -27,15 +27,17 @@ from typing import Any
 import frappe
 
 BOOKLET_QR_PROTOCOL = "inventory_campaign_recoding_tag_v1"
-ALLOWED_EXTERNAL_TAG_TYPES = {"famille", "sous_famille"}
-SUPPORTED_TAG_TYPES = {"famille", "sous_famille", "category", "plant", "workstation", "part_type"}
+ALLOWED_EXTERNAL_TAG_TYPES = {"famille", "sous_famille", "plant_floor", "workstation"}
+SUPPORTED_TAG_TYPES = {"famille", "sous_famille", "category", "plant", "plant_floor", "workstation", "machine", "part_type"}
 
 TAG_LABELS = {
     "famille": "Famille",
     "sous_famille": "Sous Famille",
     "category": "Sous Famille (legacy alias)",
     "plant": "Plant",
-    "workstation": "Workstation",
+    "plant_floor": "Plant",
+    "workstation": "Machine",
+    "machine": "Machine",
     "part_type": "Type de pièce",
 }
 
@@ -120,7 +122,8 @@ def get_mobile_recoding_config() -> dict[str, Any]:
             "sous_famille": "Sous Famille",
         },
         "rules": {
-            "external_agents_define_famille_sous_famille_and_caracteristiques": True,
+            "external_agents_define_famille_sous_famille_caracteristiques_plant_machine": True,
+            "plant_machine_are_usage_context_not_item_code": True,
             "mobile_updates_item_master": False,
             "mobile_creates_master_data": False,
             "supervisor_review_required_before_item_master_change": True,
@@ -128,6 +131,8 @@ def get_mobile_recoding_config() -> dict[str, Any]:
         "examples": {
             "famille": {"famille": {"code": "HYD", "description": "Hydraulique"}},
             "sous_famille": {"sous_famille": {"code": "PO", "parent_code": "HY", "description": "Pompes"}},
+            "plant_floor": {"plant_floor": {"code": "PF-001", "description": "Plant Floor 001"}},
+            "workstation": {"workstation": {"code": "WS-001", "parent_code": "PF-001", "description": "Machine 001"}},
         },
     }
 
@@ -171,6 +176,10 @@ def parse_booklet_qr_payload_value(
         }
 
     tag_type = str(tag_type).strip()
+    if tag_type == "plant":
+        tag_type = "plant_floor"
+    if tag_type == "machine":
+        tag_type = "workstation"
     if tag_type not in SUPPORTED_TAG_TYPES:
         return {
             "ok": False,
@@ -274,6 +283,38 @@ def _is_truthy(value: Any) -> bool:
     return False
 
 
+
+def _doctype_record_exists(doctype: str, tag: dict[str, Any] | None) -> bool:
+    """Validate that a selected ERPNext standard tag still exists.
+
+    The mobile receives Plant Floor and Workstation from ERPNext. At submit time
+    we still re-check the record to avoid accepting stale cached values. The
+    check is intentionally tolerant: if the DocType is missing on a development
+    site, validation is not blocked.
+    """
+
+    if not tag:
+        return True
+    if not frappe.db.exists("DocType", doctype):
+        return True
+
+    code = _safe_str(tag.get("code") or tag.get("name"))
+    if not code:
+        return False
+
+    if frappe.db.exists(doctype, code):
+        return True
+
+    # Some deployments may expose a custom code field, while standard ERPNext
+    # records usually use name. Check code only if the field exists.
+    try:
+        if frappe.get_meta(doctype).has_field("code"):
+            return bool(frappe.db.exists(doctype, {"code": code}))
+    except Exception:
+        pass
+
+    return False
+
 def _normalize_characteristics(value: Any) -> list[dict[str, Any]]:
     """Normalize up to five characteristics without dropping non-major rows.
 
@@ -362,6 +403,8 @@ def normalize_recoding_tags_value(tags: Any) -> dict[str, Any]:
     - famille
     - sous_famille
     - caracteristiques
+    - plant_floor
+    - workstation
 
     ``caracteristiques`` always keeps all valid characteristics captured by the
     mobile app. Only the row marked ``is_major = 1`` is additionally exposed in
@@ -396,6 +439,12 @@ def normalize_recoding_tags_value(tags: Any) -> dict[str, Any]:
     caracteristiques = _normalize_characteristics(
         data.get("caracteristiques") or data.get("characteristics")
     )
+    plant_floor = _normalize_tag_dict(
+        data.get("plant_floor") or data.get("plantFloor") or data.get("plant") or data.get("usine")
+    )
+    workstation = _normalize_tag_dict(
+        data.get("workstation") or data.get("machine")
+    )
 
     if famille and sous_famille:
         parent_code = _safe_str(sous_famille.get("parent_code"))
@@ -409,6 +458,34 @@ def normalize_recoding_tags_value(tags: Any) -> dict[str, Any]:
                 "sous_famille_parent_code": parent_code,
             }
 
+    if plant_floor and not _doctype_record_exists("Plant Floor", plant_floor):
+        return {
+            "ok": False,
+            "valid": False,
+            "reason": "Selected Plant Floor does not exist in ERPNext.",
+            "plant_floor": plant_floor,
+        }
+
+    if workstation and not _doctype_record_exists("Workstation", workstation):
+        return {
+            "ok": False,
+            "valid": False,
+            "reason": "Selected Workstation does not exist in ERPNext.",
+            "workstation": workstation,
+        }
+
+    if plant_floor and workstation:
+        workstation_parent = _safe_str(workstation.get("parent_code"))
+        plant_floor_code = _safe_str(plant_floor.get("code"))
+        if workstation_parent and plant_floor_code and workstation_parent != plant_floor_code:
+            return {
+                "ok": False,
+                "valid": False,
+                "reason": "Workstation parent_code conflicts with Plant Floor code.",
+                "plant_floor_code": plant_floor_code,
+                "workstation_parent_code": workstation_parent,
+            }
+
     normalized: dict[str, Any] = {}
     if famille:
         normalized["famille"] = famille
@@ -416,6 +493,10 @@ def normalize_recoding_tags_value(tags: Any) -> dict[str, Any]:
         normalized["sous_famille"] = sous_famille
     if caracteristiques:
         normalized["caracteristiques"] = caracteristiques
+    if plant_floor:
+        normalized["plant_floor"] = plant_floor
+    if workstation:
+        normalized["workstation"] = workstation
 
     major = next((row for row in caracteristiques if _safe_str(row.get("is_major")) == "1"), None)
     has_recoding = bool(normalized)
@@ -434,6 +515,10 @@ def normalize_recoding_tags_value(tags: Any) -> dict[str, Any]:
             "sous_famille_description": _safe_str((sous_famille or {}).get("description")),
             "caracteristique_majeure_code": _safe_str((major or {}).get("property_code")),
             "caracteristique_majeure": _major_characteristic_label(major),
+            "plant_floor": _safe_str((plant_floor or {}).get("code")),
+            "plant_floor_description": _safe_str((plant_floor or {}).get("description")),
+            "workstation": _safe_str((workstation or {}).get("code")),
+            "workstation_description": _safe_str((workstation or {}).get("description")),
         },
     }
 
@@ -474,6 +559,11 @@ def apply_recoding_tag_value(
 
     tag_type = parsed["tag_type"]
     tag = parsed["tag"]
+
+    if tag_type == "plant":
+        tag_type = "plant_floor"
+    if tag_type == "machine":
+        tag_type = "workstation"
 
     if tag_type == "category":
         existing_famille = current.get("famille") if isinstance(current.get("famille"), dict) else None
