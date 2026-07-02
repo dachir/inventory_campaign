@@ -259,7 +259,14 @@ def _normalize_tag_dict(value: Any) -> dict[str, Any] | None:
 
     code = _safe_str(value.get("code") or value.get("name"))
     description = _safe_str(value.get("description") or value.get("label"))
-    parent_code = _safe_str(value.get("parent_code") or value.get("parent"))
+    parent_code = _safe_str(
+        value.get("plant_floor")
+        or value.get("plant_floor_code")
+        or value.get("parent_code")
+        or value.get("parent")
+        or value.get("plant")
+        or value.get("plantFloor")
+    )
 
     if not code or not description:
         return None
@@ -314,6 +321,50 @@ def _doctype_record_exists(doctype: str, tag: dict[str, Any] | None) -> bool:
         pass
 
     return False
+
+
+def _has_field(doctype: str, fieldname: str) -> bool:
+    try:
+        return bool(frappe.get_meta(doctype).has_field(fieldname))
+    except Exception:
+        return False
+
+
+def _resolve_doctype_name(doctype: str, code: str | None) -> str | None:
+    code = _safe_str(code)
+    if not code:
+        return None
+
+    if frappe.db.exists(doctype, code):
+        return code
+
+    try:
+        if frappe.get_meta(doctype).has_field("code"):
+            return frappe.db.get_value(doctype, {"code": code}, "name")
+    except Exception:
+        pass
+
+    return None
+
+
+def _get_workstation_plant_floor(workstation: dict[str, Any] | None) -> str | None:
+    """Return the real Plant Floor linked on the ERPNext Workstation record."""
+
+    if not workstation or not frappe.db.exists("DocType", "Workstation"):
+        return None
+
+    if not _has_field("Workstation", "plant_floor"):
+        return None
+
+    workstation_name = _resolve_doctype_name(
+        "Workstation",
+        _safe_str(workstation.get("code") or workstation.get("name")),
+    )
+    if not workstation_name:
+        return None
+
+    return _safe_str(frappe.db.get_value("Workstation", workstation_name, "plant_floor"))
+
 
 def _normalize_characteristics(value: Any) -> list[dict[str, Any]]:
     """Normalize up to five characteristics without dropping non-major rows.
@@ -474,17 +525,39 @@ def normalize_recoding_tags_value(tags: Any) -> dict[str, Any]:
             "workstation": workstation,
         }
 
+    if workstation and not plant_floor:
+        return {
+            "ok": False,
+            "valid": False,
+            "reason": "A Workstation cannot be submitted without its parent Plant Floor.",
+            "workstation": workstation,
+        }
+
     if plant_floor and workstation:
-        workstation_parent = _safe_str(workstation.get("parent_code"))
         plant_floor_code = _safe_str(plant_floor.get("code"))
-        if workstation_parent and plant_floor_code and workstation_parent != plant_floor_code:
+        workstation_parent = _get_workstation_plant_floor(workstation)
+
+        if not workstation_parent:
             return {
                 "ok": False,
                 "valid": False,
-                "reason": "Workstation parent_code conflicts with Plant Floor code.",
+                "reason": "Selected Workstation is not linked to a Plant Floor in ERPNext.",
+                "plant_floor_code": plant_floor_code,
+                "workstation": workstation,
+            }
+
+        if plant_floor_code and workstation_parent != plant_floor_code:
+            return {
+                "ok": False,
+                "valid": False,
+                "reason": "Selected Workstation does not belong to the selected Plant Floor.",
                 "plant_floor_code": plant_floor_code,
                 "workstation_parent_code": workstation_parent,
             }
+
+        # Trust the server-side ERPNext relationship, not the cached mobile value.
+        workstation["parent_code"] = workstation_parent
+        workstation["plant_floor"] = workstation_parent
 
     normalized: dict[str, Any] = {}
     if famille:

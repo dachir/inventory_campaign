@@ -906,12 +906,17 @@ def _first_non_empty(row: dict[str, Any], candidates: list[str]) -> str | None:
 def _get_plant_machine_referential() -> dict[str, Any]:
     """Return standard ERPNext Plant Floor / Workstation lists for mobile tags.
 
+    Plant Floor is the parent/context. Workstation is deliberately returned only
+    when it is linked to a Plant Floor. The mobile must not receive orphan
+    Workstations, otherwise it cannot enforce the Plant -> Workstation cascade.
+
     These are not part of the spare-part code. They are usage/context tags that
     allow the mobile agent to indicate where the part is used.
     """
 
     plant_floors: list[dict[str, Any]] = []
     workstations: list[dict[str, Any]] = []
+    plant_floor_names: set[str] = set()
 
     if _has_doctype("Plant Floor"):
         plant_label_fields = _get_existing_fields(
@@ -920,8 +925,12 @@ def _get_plant_machine_referential() -> dict[str, Any]:
         )
         plant_fields = ["name", *plant_label_fields]
         for row in frappe.get_all("Plant Floor", fields=plant_fields, order_by="name asc"):
-            name = row.get("name")
+            name = _safe_str(row.get("name"))
+            if not name:
+                continue
+
             label = _first_non_empty(row, plant_label_fields) or name
+            plant_floor_names.add(name)
             plant_floors.append({
                 "name": name,
                 "code": name,
@@ -942,26 +951,43 @@ def _get_plant_machine_referential() -> dict[str, Any]:
             "Workstation",
             ["disabled", "is_disabled"],
         )
-        workstation_fields = [
-            "name",
-            *workstation_label_fields,
-            *workstation_parent_fields,
-            *workstation_flag_fields,
-        ]
-        for row in frappe.get_all("Workstation", fields=workstation_fields, order_by="name asc"):
-            if any(cint(row.get(fieldname)) for fieldname in workstation_flag_fields):
-                continue
-            name = row.get("name")
-            label = _first_non_empty(row, workstation_label_fields) or name
-            plant_floor = _first_non_empty(row, workstation_parent_fields)
-            workstations.append({
-                "name": name,
-                "code": name,
-                "description": label,
-                "label": label,
-                "parent_code": plant_floor,
-                "plant_floor": plant_floor,
-            })
+
+        # ERPNext v15 exposes Plant Floor from Workstation through plant_floor.
+        # Without that field, we cannot build a reliable parent/child relation,
+        # so no Workstation is sent to mobile.
+        if workstation_parent_fields:
+            workstation_fields = [
+                "name",
+                *workstation_label_fields,
+                *workstation_parent_fields,
+                *workstation_flag_fields,
+            ]
+            for row in frappe.get_all("Workstation", fields=workstation_fields, order_by="name asc"):
+                if any(cint(row.get(fieldname)) for fieldname in workstation_flag_fields):
+                    continue
+
+                name = _safe_str(row.get("name"))
+                if not name:
+                    continue
+
+                plant_floor = _first_non_empty(row, workstation_parent_fields)
+
+                # Strict parent/child rule: no Plant Floor means no mobile option.
+                # If the linked Plant Floor is stale/missing, also ignore it.
+                if not plant_floor or plant_floor not in plant_floor_names:
+                    continue
+
+                label = _first_non_empty(row, workstation_label_fields) or name
+                workstations.append({
+                    "name": name,
+                    "code": name,
+                    "description": label,
+                    "label": label,
+                    "parent_code": plant_floor,
+                    "plant_floor": plant_floor,
+                    "plant_floor_code": plant_floor,
+                    "is_child_of_plant_floor": 1,
+                })
 
     version_parts = [
         _get_latest_modified("Plant Floor"),
@@ -973,6 +999,10 @@ def _get_plant_machine_referential() -> dict[str, Any]:
         "plants": plant_floors,
         "workstations": workstations,
         "machines": workstations,
+        "rules": {
+            "workstation_requires_plant_floor": True,
+            "workstation_filter_mode": "strict_parent_match",
+        },
         "version": version,
     }
     data["hash"] = hashlib.sha256(_json_dumps({
@@ -980,7 +1010,6 @@ def _get_plant_machine_referential() -> dict[str, Any]:
         "workstations": workstations,
     }).encode("utf-8")).hexdigest()
     return data
-
 
 def _get_codification_referential() -> dict[str, Any]:
     families: list[dict[str, Any]] = []
