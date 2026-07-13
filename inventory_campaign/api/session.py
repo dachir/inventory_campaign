@@ -23,6 +23,8 @@ import base64
 import hashlib
 import json
 import re
+import shutil
+from pathlib import Path
 from typing import Any
 
 import frappe
@@ -41,6 +43,10 @@ SUBMIT_PROTOCOL = "inventory_campaign_session_submit_v1"
 ALLOWED_SESSION_STATUSES_FOR_IDEMPOTENT_ACK = {"Submitted", "Imported", "Rejected", "Cancelled", "Failed"}
 DATA_IMAGE_PATTERN = re.compile(r"^data:(image/(?:jpeg|jpg|png|webp));base64,(.+)$", re.IGNORECASE | re.DOTALL)
 PHOTO_FIELDNAMES = ("photo_1", "photo_2", "photo_3")
+PHOTO_UPLOAD_CHUNK_MAX_CHARS = 300_000
+PHOTO_UPLOAD_MAX_CHUNKS = 64
+PHOTO_UPLOAD_MAX_BYTES = 5 * 1024 * 1024
+PHOTO_UPLOAD_TEMP_FOLDER = ".inventory_campaign_photo_chunks"
 
 
 # -----------------------------------------------------------------------------
@@ -1485,3 +1491,408 @@ def submit_inventory_session(
         "mobile_can_purge": True,
         "next_step": "purge_mobile_local_data",
     }
+
+
+# -----------------------------------------------------------------------------
+# Deferred/chunked photo upload
+# -----------------------------------------------------------------------------
+
+
+def _photo_upload_temp_dir(
+    inventory_session: str,
+    item_code: str,
+    photo_field: str,
+    upload_id: str,
+) -> Path:
+    """Return a non-user-controlled temporary directory for one photo upload."""
+
+    seed = "|".join(
+        [
+            _safe_str(getattr(frappe.local, "site", None)) or "site",
+            inventory_session,
+            item_code,
+            photo_field,
+            upload_id,
+        ]
+    )
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    root = Path(frappe.get_site_path("private", "files", PHOTO_UPLOAD_TEMP_FOLDER))
+    return root / digest
+
+
+def _remove_photo_upload_temp_dir(path: Path) -> None:
+    try:
+        if path.exists():
+            shutil.rmtree(path)
+    except Exception:
+        frappe.log_error(
+            title="Inventory Campaign - photo_upload_temp_cleanup_failed",
+            message=frappe.get_traceback(),
+        )
+
+
+def _validate_photo_upload_target(
+    *,
+    mobile_credential: str,
+    inventory_session: str,
+    mobile_session_id: str,
+    item_code: str,
+    photo_field: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, dict[str, Any] | None]:
+    """Validate credential, session ownership, item row, and target field.
+
+    Returns ``(session_row, child_row, error_response)``.
+    """
+
+    if photo_field not in PHOTO_FIELDNAMES:
+        return None, None, _error(
+            "Champ photo invalide.",
+            log=True,
+            error_code="PHOTO_FIELD_INVALID",
+            error_stage="photo_upload_validation",
+            mobile_session_id=mobile_session_id,
+            details={"photo_field": photo_field},
+        )
+
+    session_row = frappe.db.get_value(
+        "Inventory Session",
+        inventory_session,
+        ["name", "campaign", "mobile_session_id", "inventory_agent", "docstatus"],
+        as_dict=True,
+    )
+    if not session_row:
+        return None, None, _error(
+            "La session ERPNext à laquelle rattacher la photo est introuvable.",
+            log=True,
+            error_code="PHOTO_SESSION_NOT_FOUND",
+            error_stage="photo_upload_validation",
+            session=inventory_session,
+            mobile_session_id=mobile_session_id,
+        )
+
+    if _safe_str(session_row.get("mobile_session_id")) != mobile_session_id:
+        return None, None, _error(
+            "L’identifiant de session mobile ne correspond pas à la session ERPNext.",
+            log=True,
+            error_code="PHOTO_SESSION_ID_MISMATCH",
+            error_stage="photo_upload_validation",
+            campaign=session_row.get("campaign"),
+            session=inventory_session,
+            mobile_session_id=mobile_session_id,
+        )
+
+    verification = _verify_mobile_credential(
+        mobile_credential=mobile_credential,
+        campaign=_safe_str(session_row.get("campaign")),
+    )
+    if not verification.get("valid"):
+        return None, None, _error(
+            "Credential mobile refusé pendant l’envoi d’une photo.",
+            log=True,
+            error_code="PHOTO_CREDENTIAL_INVALID",
+            error_stage="photo_upload_credential_validation",
+            campaign=session_row.get("campaign"),
+            session=inventory_session,
+            mobile_session_id=mobile_session_id,
+            technical_message=verification.get("reason") or "Mobile credential is invalid.",
+        )
+
+    credential_payload = verification.get("payload") or {}
+    credential_agent = _safe_str(credential_payload.get("inventory_agent"))
+    session_agent = _safe_str(session_row.get("inventory_agent"))
+    if session_agent and credential_agent and session_agent != credential_agent:
+        return None, None, _error(
+            "Cette photo n’appartient pas à la session de l’agent connecté.",
+            log=True,
+            error_code="PHOTO_AGENT_MISMATCH",
+            error_stage="photo_upload_credential_validation",
+            campaign=session_row.get("campaign"),
+            session=inventory_session,
+            inventory_agent=credential_agent,
+            mobile_session_id=mobile_session_id,
+            details={"session_agent": session_agent, "credential_agent": credential_agent},
+        )
+
+    child_row = frappe.db.get_value(
+        "Inventory Session Item",
+        {
+            "parent": inventory_session,
+            "parenttype": "Inventory Session",
+            "item_code": item_code,
+        },
+        ["name", "item_code", photo_field],
+        as_dict=True,
+    )
+    if not child_row:
+        return None, None, _error(
+            "La ligne d’article correspondant à la photo est introuvable dans la session ERPNext.",
+            log=True,
+            error_code="PHOTO_ITEM_ROW_NOT_FOUND",
+            error_stage="photo_upload_validation",
+            campaign=session_row.get("campaign"),
+            session=inventory_session,
+            mobile_session_id=mobile_session_id,
+            details={"item_code": item_code, "photo_field": photo_field},
+        )
+
+    return session_row, child_row, None
+
+
+@frappe.whitelist(allow_guest=True)
+def upload_inventory_session_photo_chunk(
+    mobile_credential: str | None = None,
+    inventory_session: str | None = None,
+    mobile_session_id: str | None = None,
+    item_code: str | None = None,
+    photo_field: str | None = None,
+    upload_id: str | None = None,
+    chunk_index: int | str | None = None,
+    total_chunks: int | str | None = None,
+    chunk_data: str | None = None,
+    mime_type: str | None = None,
+    file_name: str | None = None,
+    total_bytes: int | str | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Receive one small base64 chunk and attach the completed photo.
+
+    The mobile submits inventory data without inline base64 images, then sends
+    each optional photo in chunks. This prevents HTTP 413 on large sessions while
+    preserving the rule that local data is purged only after every photo is ACKed.
+    """
+
+    mobile_credential = _safe_str(mobile_credential)
+    inventory_session = _safe_str(inventory_session)
+    mobile_session_id = _safe_str(mobile_session_id)
+    item_code = _safe_str(item_code)
+    photo_field = _safe_str(photo_field)
+    upload_id = _safe_str(upload_id)
+    chunk_data = _safe_str(chunk_data)
+    mime_type = (_safe_str(mime_type) or "image/jpeg").lower().replace("image/jpg", "image/jpeg")
+    file_name = _safe_str(file_name)
+    chunk_index_value = _safe_int(chunk_index, -1)
+    total_chunks_value = _safe_int(total_chunks, 0)
+    total_bytes_value = _safe_int(total_bytes, 0)
+
+    required_values = {
+        "mobile_credential": mobile_credential,
+        "inventory_session": inventory_session,
+        "mobile_session_id": mobile_session_id,
+        "item_code": item_code,
+        "photo_field": photo_field,
+        "upload_id": upload_id,
+        "chunk_data": chunk_data,
+    }
+    missing = [key for key, value in required_values.items() if not value]
+    if missing:
+        return _error(
+            "Données incomplètes pour l’envoi de la photo.",
+            log=True,
+            error_code="PHOTO_UPLOAD_ARGUMENTS_MISSING",
+            error_stage="photo_upload_validation",
+            session=inventory_session,
+            mobile_session_id=mobile_session_id,
+            details={"missing": missing},
+        )
+
+    if mime_type not in {"image/jpeg", "image/png", "image/webp"}:
+        return _error(
+            "Format de photo non pris en charge.",
+            log=True,
+            error_code="PHOTO_MIME_TYPE_INVALID",
+            error_stage="photo_upload_validation",
+            session=inventory_session,
+            mobile_session_id=mobile_session_id,
+            details={"mime_type": mime_type},
+        )
+
+    if not (1 <= total_chunks_value <= PHOTO_UPLOAD_MAX_CHUNKS):
+        return _error(
+            "Nombre de blocs photo invalide.",
+            log=True,
+            error_code="PHOTO_CHUNK_COUNT_INVALID",
+            error_stage="photo_upload_validation",
+            session=inventory_session,
+            mobile_session_id=mobile_session_id,
+            details={"total_chunks": total_chunks_value},
+        )
+
+    if not (0 <= chunk_index_value < total_chunks_value):
+        return _error(
+            "Index de bloc photo invalide.",
+            log=True,
+            error_code="PHOTO_CHUNK_INDEX_INVALID",
+            error_stage="photo_upload_validation",
+            session=inventory_session,
+            mobile_session_id=mobile_session_id,
+            details={"chunk_index": chunk_index_value, "total_chunks": total_chunks_value},
+        )
+
+    if len(chunk_data) > PHOTO_UPLOAD_CHUNK_MAX_CHARS:
+        return _error(
+            "Un bloc photo dépasse la taille autorisée.",
+            log=True,
+            error_code="PHOTO_CHUNK_TOO_LARGE",
+            error_stage="photo_upload_validation",
+            session=inventory_session,
+            mobile_session_id=mobile_session_id,
+            details={"chunk_chars": len(chunk_data), "maximum": PHOTO_UPLOAD_CHUNK_MAX_CHARS},
+        )
+
+    if total_bytes_value and total_bytes_value > PHOTO_UPLOAD_MAX_BYTES:
+        return _error(
+            "La photo dépasse la taille maximale de 5 Mo.",
+            log=True,
+            error_code="PHOTO_TOO_LARGE",
+            error_stage="photo_upload_validation",
+            session=inventory_session,
+            mobile_session_id=mobile_session_id,
+            details={"total_bytes": total_bytes_value, "maximum": PHOTO_UPLOAD_MAX_BYTES},
+        )
+
+    session_row, child_row, validation_error = _validate_photo_upload_target(
+        mobile_credential=mobile_credential,
+        inventory_session=inventory_session,
+        mobile_session_id=mobile_session_id,
+        item_code=item_code,
+        photo_field=photo_field,
+    )
+    if validation_error:
+        return validation_error
+
+    existing_url = _safe_str(child_row.get(photo_field))
+    if existing_url:
+        return {
+            "ok": True,
+            "ack": True,
+            "photo_complete": True,
+            "duplicate": True,
+            "inventory_session": inventory_session,
+            "item_code": item_code,
+            "photo_field": photo_field,
+            "file_url": existing_url,
+            "mobile_can_purge": True,
+        }
+
+    temp_dir = _photo_upload_temp_dir(
+        inventory_session=inventory_session,
+        item_code=item_code,
+        photo_field=photo_field,
+        upload_id=upload_id,
+    )
+
+    try:
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        metadata_path = temp_dir / "metadata.json"
+        metadata = {
+            "inventory_session": inventory_session,
+            "mobile_session_id": mobile_session_id,
+            "item_code": item_code,
+            "photo_field": photo_field,
+            "upload_id": upload_id,
+            "total_chunks": total_chunks_value,
+            "mime_type": mime_type,
+            "file_name": file_name,
+            "total_bytes": total_bytes_value,
+        }
+
+        if metadata_path.exists():
+            existing_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            comparable_keys = ("total_chunks", "mime_type", "total_bytes")
+            if any(existing_metadata.get(key) != metadata.get(key) for key in comparable_keys):
+                _remove_photo_upload_temp_dir(temp_dir)
+                temp_dir.mkdir(parents=True, exist_ok=True)
+
+        metadata_path.write_text(_json_dumps(metadata), encoding="utf-8")
+        (temp_dir / f"chunk-{chunk_index_value:04d}.txt").write_text(chunk_data, encoding="ascii")
+
+        chunk_paths = [temp_dir / f"chunk-{index:04d}.txt" for index in range(total_chunks_value)]
+        received_chunks = sum(1 for path in chunk_paths if path.exists())
+        if received_chunks < total_chunks_value:
+            return {
+                "ok": True,
+                "ack": True,
+                "photo_complete": False,
+                "chunk_received": True,
+                "chunk_index": chunk_index_value,
+                "received_chunks": received_chunks,
+                "total_chunks": total_chunks_value,
+                "inventory_session": inventory_session,
+                "item_code": item_code,
+                "photo_field": photo_field,
+                "mobile_can_purge": False,
+            }
+
+        encoded = "".join(path.read_text(encoding="ascii") for path in chunk_paths)
+        content = base64.b64decode(encoded, validate=True)
+        if not content:
+            raise ValueError("Decoded photo is empty")
+        if len(content) > PHOTO_UPLOAD_MAX_BYTES:
+            raise ValueError(f"Decoded photo exceeds {PHOTO_UPLOAD_MAX_BYTES} bytes")
+        if total_bytes_value and len(content) != total_bytes_value:
+            raise ValueError(
+                f"Decoded photo size mismatch: expected {total_bytes_value}, got {len(content)}"
+            )
+
+        ext = _photo_extension_from_mime(mime_type)
+        safe_session = re.sub(r"[^A-Za-z0-9_.-]+", "-", inventory_session).strip("-") or "session"
+        safe_item = re.sub(r"[^A-Za-z0-9_.-]+", "-", item_code).strip("-") or "item"
+        safe_field = photo_field.replace("_", "-")
+        generated_name = f"inventory-{safe_session}-{safe_item}-{safe_field}.{ext}"
+        candidate_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", file_name or "").strip("-")
+        final_name = candidate_name or generated_name
+        if "." not in final_name:
+            final_name = f"{final_name}.{ext}"
+
+        saved = save_file(
+            fname=final_name,
+            content=content,
+            dt="Inventory Session Item",
+            dn=child_row.get("name"),
+            folder=None,
+            decode=False,
+            is_private=1,
+        )
+        frappe.db.set_value(
+            "Inventory Session Item",
+            child_row.get("name"),
+            photo_field,
+            saved.file_url,
+            update_modified=False,
+        )
+        frappe.db.commit()
+        _remove_photo_upload_temp_dir(temp_dir)
+
+        return {
+            "ok": True,
+            "ack": True,
+            "photo_complete": True,
+            "duplicate": False,
+            "inventory_session": inventory_session,
+            "item_code": item_code,
+            "photo_field": photo_field,
+            "file_url": saved.file_url,
+            "received_chunks": total_chunks_value,
+            "total_chunks": total_chunks_value,
+            "mobile_can_purge": True,
+        }
+    except Exception as exc:
+        frappe.db.rollback()
+        return _error(
+            "ERPNext n’a pas pu enregistrer une photo. La session reste sur le téléphone.",
+            log=True,
+            error_code="PHOTO_UPLOAD_FAILED",
+            error_stage="photo_upload_finalize",
+            campaign=session_row.get("campaign") if session_row else None,
+            session=inventory_session,
+            inventory_agent=session_row.get("inventory_agent") if session_row else None,
+            mobile_session_id=mobile_session_id,
+            technical_message=str(exc),
+            traceback=frappe.get_traceback(),
+            details={
+                "item_code": item_code,
+                "photo_field": photo_field,
+                "chunk_index": chunk_index_value,
+                "total_chunks": total_chunks_value,
+            },
+        )

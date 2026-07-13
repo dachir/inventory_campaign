@@ -186,6 +186,23 @@ def _has_field(doctype: str, fieldname: str) -> bool:
         return False
 
 
+def _existing_link(doctype: str, name: Any) -> str | None:
+    """Return ``name`` only when it resolves to an existing linked document.
+
+    Error logging must never fail because a mobile payload contains a missing,
+    stale, or malformed Link value. This helper is intentionally defensive and
+    returns ``None`` for any lookup problem.
+    """
+
+    value = _safe_str(name)
+    if not value or not _has_doctype(doctype):
+        return None
+
+    try:
+        return value if frappe.db.exists(doctype, value) else None
+    except Exception:
+        return None
+
 
 def _extract_agent_from_mobile_credential(mobile_credential: str | None) -> dict[str, Any]:
     mobile_credential = _safe_str(mobile_credential)
