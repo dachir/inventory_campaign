@@ -21,7 +21,8 @@
   "physical_count",
   "quantity_difference",
   "physical_stock_value",
-  "difference_amount"
+  "difference_amount",
+  "manual_valuation_required"
  ],
  "fields": [
   {
@@ -125,13 +126,19 @@
    "fieldtype": "Currency",
    "label": "Difference Amount",
    "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "manual_valuation_required",
+   "fieldtype": "Check",
+   "label": "Manual Valuation Required"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-09-28 15:45:15.925411",
+ "modified": "2026-09-28 20:00:23.496005",
  "modified_by": "Administrator",
  "module": "Inventory Campaign",
  "name": "Inventory Count Session Detail",
