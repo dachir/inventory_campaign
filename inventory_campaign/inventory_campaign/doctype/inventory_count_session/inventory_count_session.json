@@ -1,0 +1,113 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "{YY}COUNT{MM}##",
+ "creation": "2026-09-28 15:27:38.892015",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "inventory_campaign",
+  "branch",
+  "column_break_wpvz",
+  "inventory_date",
+  "difference_amount",
+  "section_break_rejw",
+  "table_uawl",
+  "section_break_uu8x",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_uu8x",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Inventory Count Session",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "inventory_campaign",
+   "fieldtype": "Link",
+   "label": "Inventory Campaign",
+   "options": "Inventory Campaign"
+  },
+  {
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "label": "Branch",
+   "options": "Branch"
+  },
+  {
+   "fieldname": "column_break_wpvz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "inventory_date",
+   "fieldtype": "Date",
+   "label": "Inventory Date"
+  },
+  {
+   "fieldname": "section_break_rejw",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "table_uawl",
+   "fieldtype": "Table",
+   "options": "Inventory Count Session Detail"
+  },
+  {
+   "fieldname": "difference_amount",
+   "fieldtype": "Float",
+   "label": "Difference Amount"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-09-28 15:52:11.222726",
+ "modified_by": "Administrator",
+ "module": "Inventory Campaign",
+ "name": "Inventory Count Session",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
