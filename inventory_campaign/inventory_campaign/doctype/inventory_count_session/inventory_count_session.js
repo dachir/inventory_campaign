@@ -10,6 +10,24 @@ frappe.ui.form.on("Inventory Count Session", {
     },
 });
 
+frappe.ui.form.on("Inventory Count Session Detail", {
+    physical_count(frm, cdt, cdn) {
+        recalculate_inventory_row(frm, cdt, cdn);
+    },
+
+    qty_in_ct(frm, cdt, cdn) {
+        recalculate_inventory_row(frm, cdt, cdn);
+    },
+
+    stock_valuation(frm, cdt, cdn) {
+        recalculate_inventory_row(frm, cdt, cdn);
+    },
+
+    table_uawl_remove(frm) {
+        recalculate_header_difference_amount(frm);
+    },
+});
+
 function initialize_inventory(frm) {
     const warehouses = get_selected_warehouses(frm);
 
@@ -110,6 +128,9 @@ function load_inventory_snapshot(frm, warehouses, detail_field) {
                 row.quantity_difference = 0;
                 row.physical_stock_value = 0;
                 row.difference_amount = 0;
+
+                // Keep the client-side values aligned with the server formulas.
+                recalculate_inventory_row_values(row);
             });
 
             frm.set_value("difference_amount", 0);
@@ -123,6 +144,70 @@ function load_inventory_snapshot(frm, warehouses, detail_field) {
             });
         },
     });
+}
+
+function recalculate_inventory_row(frm, cdt, cdn) {
+    const row = locals[cdt][cdn];
+    recalculate_inventory_row_values(row);
+
+    const detail_field = get_inventory_detail_field(frm);
+    frm.refresh_field(detail_field);
+    recalculate_header_difference_amount(frm);
+}
+
+function recalculate_inventory_row_values(row) {
+    const qty_in_ct = to_number(row.qty_in_ct);
+    const stock_valuation = to_number(row.stock_valuation);
+
+    // Business rule: valuation rate is the ERP stock value per CT.
+    // If there is no theoretical CT quantity, the ratio cannot be derived
+    // client-side. Keep the existing rate (the server remains authoritative).
+    if (qty_in_ct !== 0) {
+        row.valuation_rate = stock_valuation / qty_in_ct;
+    } else {
+        row.valuation_rate = to_number(row.valuation_rate);
+    }
+
+    // A blank Physical Count means that the line has not been counted yet.
+    // It must not be interpreted as a physical quantity of zero.
+    if (is_blank(row.physical_count)) {
+        row.quantity_difference = 0;
+        row.physical_stock_value = 0;
+        row.difference_amount = 0;
+        return;
+    }
+
+    const physical_count = to_number(row.physical_count);
+    const valuation_rate = to_number(row.valuation_rate);
+
+    row.quantity_difference = physical_count - qty_in_ct;
+    row.physical_stock_value = physical_count * valuation_rate;
+    row.difference_amount = row.physical_stock_value - stock_valuation;
+}
+
+function recalculate_header_difference_amount(frm) {
+    const detail_field = get_inventory_detail_field(frm);
+    const rows = frm.doc[detail_field] || [];
+
+    let total = 0;
+    rows.forEach((row) => {
+        // Defensive recalculation keeps the header correct even after grid edits.
+        recalculate_inventory_row_values(row);
+        total += to_number(row.difference_amount);
+    });
+
+    frm.set_value("difference_amount", total);
+    frm.refresh_field(detail_field);
+    frm.refresh_field("difference_amount");
+}
+
+function is_blank(value) {
+    return value === null || value === undefined || value === "";
+}
+
+function to_number(value) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function get_selected_warehouses(frm) {
