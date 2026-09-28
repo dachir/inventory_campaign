@@ -1,13 +1,14 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "{YY}COUNT{MM}##",
+ "autoname": "format:{YY}-ICS-{MM}-{####}",
  "creation": "2026-09-28 15:27:38.892015",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "inventory_campaign",
   "branch",
+  "inventory_count_warehouses",
   "column_break_wpvz",
   "inventory_date",
   "difference_amount",
@@ -65,17 +66,23 @@
    "fieldname": "difference_amount",
    "fieldtype": "Float",
    "label": "Difference Amount"
+  },
+  {
+   "fieldname": "inventory_count_warehouses",
+   "fieldtype": "Table MultiSelect",
+   "label": "Inventory Count Warehouses",
+   "options": "Inventory Count Warehouses"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-09-28 15:52:11.222726",
+ "modified": "2026-09-28 16:51:44.666833",
  "modified_by": "Administrator",
  "module": "Inventory Campaign",
  "name": "Inventory Count Session",
- "naming_rule": "Expression",
+ "naming_rule": "Expression (old style)",
  "owner": "Administrator",
  "permissions": [
   {

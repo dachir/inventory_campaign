@@ -391,3 +391,174 @@ class InventoryCountSession(Document):
             return flt(ct_rate / self._get_ct_conversion_factor(row))
 
         return self._get_base_uom_fallback_rate(row)
+
+@frappe.whitelist()
+def get_inventory_snapshot(
+    inventory_campaign: str,
+    inventory_date: str,
+    branch: str,
+    warehouses=None,
+):
+    """Return the ERP stock snapshot used to initialise a count session.
+
+    The snapshot is filtered by:
+      - company from Inventory Campaign
+      - Inventory Count Session branch
+      - exact warehouses selected in ``inventory_count_warehouses``
+      - Stock Ledger entries posted up to ``inventory_date``
+
+    This method only reads data. Clearing/replacing ``table_uawl`` is done by
+    the client after the user explicitly confirms the destructive action.
+    """
+
+    if not inventory_campaign:
+        frappe.throw("Inventory Campaign is required.")
+    if not inventory_date:
+        frappe.throw("Inventory Date is required.")
+    if not branch:
+        frappe.throw("Branch is required.")
+
+    warehouses = _normalise_warehouse_list(warehouses)
+    if not warehouses:
+        frappe.throw("Select at least one Warehouse before initialising the session.")
+
+    company = frappe.db.get_value(
+        "Inventory Campaign", inventory_campaign, "company"
+    )
+    if not company:
+        frappe.throw(
+            f"Inventory Campaign {inventory_campaign} has no Company."
+        )
+
+    placeholders = ", ".join(["%s"] * len(warehouses))
+
+    sql_query = f"""
+        WITH WarehouseStockAccount AS (
+            SELECT
+                w.name AS warehouse,
+                w.branch AS branch,
+                CASE
+                    WHEN w.account IS NOT NULL AND w.account != ''
+                    THEN w.account
+                    ELSE pw.account
+                END AS stock_account
+            FROM `tabWarehouse` w
+            LEFT JOIN `tabWarehouse` pw
+                ON w.parent_warehouse = pw.name
+            WHERE w.company = %s
+        )
+
+        SELECT
+            i.item_group AS item_group,
+            sle.item_code AS item_code,
+            i.item_name AS item_name,
+            i.stock_uom AS stock_uom,
+            sle.warehouse AS warehouse,
+            COALESCE(NULLIF(sle.quality_status, ''), 'A') AS quality_status,
+            ws.stock_account AS stock_account,
+            SUM(sle.actual_qty) AS stock_balance,
+            COALESCE(NULLIF(ucd.conversion_factor, 0), 1) AS ct_conversion_factor,
+            (
+                SUM(sle.actual_qty)
+                / COALESCE(NULLIF(ucd.conversion_factor, 0), 1)
+            ) AS qty_in_ct,
+            COALESCE(
+                SUM(sle.stock_value_difference)
+                / NULLIF(
+                    SUM(sle.actual_qty)
+                    / COALESCE(NULLIF(ucd.conversion_factor, 0), 1),
+                    0
+                ),
+                0
+            ) AS valuation_rate,
+            SUM(sle.stock_value_difference) AS stock_valuation
+        FROM `tabStock Ledger Entry` sle
+        INNER JOIN `tabItem` i
+            ON sle.item_code = i.item_code
+        LEFT JOIN WarehouseStockAccount ws
+            ON sle.warehouse = ws.warehouse
+        LEFT JOIN `tabUOM Conversion Detail` ucd
+            ON sle.item_code = ucd.parent
+            AND ucd.parenttype = 'Item'
+            AND ucd.parentfield = 'uoms'
+            AND ucd.uom = 'CT'
+        WHERE
+            sle.company = %s
+            AND sle.posting_date <= %s
+            AND ws.branch = %s
+            AND sle.warehouse IN ({placeholders})
+            AND sle.docstatus = 1
+            AND sle.is_cancelled = 0
+        GROUP BY
+            i.item_group,
+            sle.item_code,
+            i.item_name,
+            i.stock_uom,
+            sle.warehouse,
+            COALESCE(NULLIF(sle.quality_status, ''), 'A'),
+            ws.stock_account,
+            ucd.conversion_factor
+        ORDER BY
+            sle.warehouse,
+            ws.stock_account,
+            sle.item_code,
+            quality_status
+    """
+
+    params = [
+        company,           # CTE company
+        company,           # SLE company
+        inventory_date,
+        branch,
+        *warehouses,
+    ]
+
+    rows = frappe.db.sql(sql_query, params, as_dict=True)
+
+    numeric_fields = (
+        "stock_balance",
+        "ct_conversion_factor",
+        "qty_in_ct",
+        "valuation_rate",
+        "stock_valuation",
+    )
+
+    for row in rows:
+        for fieldname in numeric_fields:
+            row[fieldname] = flt(row.get(fieldname))
+
+    return rows
+
+
+def _normalise_warehouse_list(warehouses) -> list[str]:
+    """Normalise a JSON/list payload of Warehouse names from the client."""
+
+    if not warehouses:
+        return []
+
+    if isinstance(warehouses, str):
+        try:
+            warehouses = frappe.parse_json(warehouses)
+        except Exception:
+            warehouses = [warehouses]
+
+    if isinstance(warehouses, dict):
+        warehouses = list(warehouses.values())
+
+    result = []
+    seen = set()
+
+    for warehouse in warehouses or []:
+        # Accept either a plain Warehouse name or a child-row dictionary.
+        if isinstance(warehouse, dict):
+            value = warehouse.get("warehouse") or warehouse.get("value")
+        else:
+            value = warehouse
+
+        value = str(value or "").strip()
+        if value and value not in seen:
+            seen.add(value)
+            result.append(value)
+
+    return result
+
