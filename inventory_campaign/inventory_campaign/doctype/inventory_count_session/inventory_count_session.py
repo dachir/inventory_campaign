@@ -15,7 +15,7 @@ class InventoryCountSession(Document):
     On every save, the document calculates the quantity/value variance of each
     counted row and the signed total variance on the parent document.
 
-    On submit, at most two Stock Entries are generated and submitted:
+    On submit, at most two Stock Entries are generated in Draft:
     - Inventory Count Issue   -> all negative quantity differences
     - Inventory Count Receipt -> all positive quantity differences
 
@@ -32,11 +32,10 @@ class InventoryCountSession(Document):
         self.calculate_inventory_differences()
 
     def before_submit(self):
-        # validate() has already recalculated the values before submit, but keep
-        # the business validations explicit here.
+        # Session-level rule only: every row must have been physically counted.
+        # Once Stock Entry creation starts, ERPNext standard validations are the
+        # sole authority for the Stock Entry and its items.
         self.validate_all_lines_are_counted()
-        self.validate_stock_entry_types()
-        self.validate_adjustment_rows()
 
     def on_submit(self):
         issue_rows = []
@@ -53,14 +52,14 @@ class InventoryCountSession(Document):
         if issue_rows:
             self.create_inventory_stock_entry(
                 stock_entry_type=ISSUE_STOCK_ENTRY_TYPE,
-                expected_purpose="Material Issue",
+                movement="issue",
                 rows=issue_rows,
             )
 
         if receipt_rows:
             self.create_inventory_stock_entry(
                 stock_entry_type=RECEIPT_STOCK_ENTRY_TYPE,
-                expected_purpose="Material Receipt",
+                movement="receipt",
                 rows=receipt_rows,
             )
 
@@ -156,79 +155,6 @@ class InventoryCountSession(Document):
                 )
             )
 
-    def validate_stock_entry_types(self):
-        self._get_and_validate_purpose(
-            ISSUE_STOCK_ENTRY_TYPE, expected_purpose="Material Issue"
-        )
-        self._get_and_validate_purpose(
-            RECEIPT_STOCK_ENTRY_TYPE, expected_purpose="Material Receipt"
-        )
-
-    def validate_adjustment_rows(self):
-        """Validate data required to create safe inventory Stock Entries.
-
-        Batch/serial-controlled items are deliberately blocked for now because
-        the current Inventory Count Session Detail is aggregated by
-        item/warehouse/quality status and does not identify the batch or serial
-        numbers that must be issued/received.
-        """
-
-        errors = []
-
-        for row in self.get("table_uawl") or []:
-            difference_qty = flt(row.quantity_difference)
-            if not difference_qty:
-                continue
-
-            if not row.item_code:
-                errors.append(f"Row {row.idx}: Item Code is required.")
-                continue
-
-            if not row.warehouse:
-                errors.append(f"Row {row.idx}: Warehouse is required.")
-
-            if not row.quality_status:
-                errors.append(f"Row {row.idx}: Quality Status is required.")
-
-            if flt(row.ct_conversion_factor) <= 0:
-                errors.append(
-                    f"Row {row.idx} ({row.item_code}): CT Conversion Factor must be greater than zero."
-                )
-
-            item_flags = frappe.db.get_value(
-                "Item",
-                row.item_code,
-                ["has_batch_no", "has_serial_no"],
-                as_dict=True,
-            ) or {}
-
-            if item_flags.get("has_batch_no") or item_flags.get("has_serial_no"):
-                controlled_by = []
-                if item_flags.get("has_batch_no"):
-                    controlled_by.append("batch")
-                if item_flags.get("has_serial_no"):
-                    controlled_by.append("serial number")
-
-                errors.append(
-                    "Row {0} ({1}): adjustment cannot be generated yet because "
-                    "the Item is controlled by {2}.".format(
-                        row.idx,
-                        row.item_code,
-                        " and ".join(controlled_by),
-                    )
-                )
-
-            if difference_qty > 0 and self._get_receipt_rate(row) <= 0:
-                errors.append(
-                    "Row {0} ({1}): a positive inventory difference requires "
-                    "a valuation rate greater than zero for the receipt.".format(
-                        row.idx, row.item_code
-                    )
-                )
-
-        if errors:
-            frappe.throw("<br>".join(errors))
-
     # ------------------------------------------------------------------
     # Stock Entry generation
     # ------------------------------------------------------------------
@@ -236,28 +162,25 @@ class InventoryCountSession(Document):
     def create_inventory_stock_entry(
         self,
         stock_entry_type: str,
-        expected_purpose: str,
+        movement: str,
         rows: list,
     ):
-        purpose = self._get_and_validate_purpose(
-            stock_entry_type, expected_purpose=expected_purpose
-        )
+        """Create one Draft Stock Entry and let ERPNext validate it normally.
+
+        No custom Stock Entry validation is performed here. We only map the
+        inventory-count data to a Stock Entry document and call ``insert()``.
+        From that point onward, all Link, warehouse, batch/serial, valuation,
+        accounting, mandatory-field and Stock Entry Type checks belong to
+        ERPNext standard logic.
+        """
         company = self._get_company()
 
         stock_entry = frappe.new_doc("Stock Entry")
         stock_entry.company = company
         stock_entry.stock_entry_type = stock_entry_type
-        stock_entry.purpose = purpose
         stock_entry.posting_date = self.inventory_date
 
-        # Traceability: every Stock Entry generated by this process points back
-        # to its source Inventory Count Session. Since rows are grouped by sign,
-        # a session can generate at most one Issue and one Receipt.
-        if not frappe.get_meta("Stock Entry").has_field("custom_inventory_count_session"):
-            frappe.throw(
-                "Stock Entry field custom_inventory_count_session is required "
-                "to submit an Inventory Count Session."
-            )
+        # Traceability only; no custom validation around this field.
         stock_entry.custom_inventory_count_session = self.name
         stock_entry.remarks = (
             f"Generated automatically from Inventory Count Session {self.name} "
@@ -285,7 +208,7 @@ class InventoryCountSession(Document):
                 "conversion_factor": 1,
             }
 
-            if expected_purpose == "Material Issue":
+            if movement == "issue":
                 item["s_warehouse"] = row.warehouse
             else:
                 item["t_warehouse"] = row.warehouse
@@ -302,14 +225,15 @@ class InventoryCountSession(Document):
 
             stock_entry.append("items", item)
 
+        # Create the adjustment Stock Entry in Draft only.
+        # A stock manager can review it before submitting the actual stock movement.
         stock_entry.insert()
-        stock_entry.submit()
 
         # Keep an auditable trail even without adding extra Link fields to the
         # Inventory Count Session DocType yet.
         self.add_comment(
             "Info",
-            f"Created and submitted Stock Entry {stock_entry.name} "
+            f"Created Draft Stock Entry {stock_entry.name} "
             f"({stock_entry_type}).",
         )
 
@@ -335,28 +259,6 @@ class InventoryCountSession(Document):
     @staticmethod
     def _is_blank(value) -> bool:
         return value is None or value == ""
-
-    @staticmethod
-    def _get_and_validate_purpose(
-        stock_entry_type: str, expected_purpose: str
-    ) -> str:
-        purpose = frappe.db.get_value(
-            "Stock Entry Type", stock_entry_type, "purpose"
-        )
-
-        if not purpose:
-            frappe.throw(
-                f"Stock Entry Type {stock_entry_type} does not exist or has no purpose."
-            )
-
-        if purpose != expected_purpose:
-            frappe.throw(
-                "Stock Entry Type {0} must have purpose {1}, current purpose is {2}.".format(
-                    stock_entry_type, expected_purpose, purpose
-                )
-            )
-
-        return purpose
 
     @staticmethod
     def _get_ct_conversion_factor(row) -> float:
