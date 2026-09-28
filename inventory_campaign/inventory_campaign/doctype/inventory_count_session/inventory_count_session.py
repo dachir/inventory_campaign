@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import flt, getdate
+from frappe.utils import cint, flt, getdate
 
 
 ISSUE_STOCK_ENTRY_TYPE = "Inventory Count Issue"
@@ -36,6 +36,7 @@ class InventoryCountSession(Document):
         # Once Stock Entry creation starts, ERPNext standard validations are the
         # sole authority for the Stock Entry and its items.
         self.validate_all_lines_are_counted()
+        self.validate_manual_valuation_rates()
 
     def on_submit(self):
         issue_rows = []
@@ -68,29 +69,67 @@ class InventoryCountSession(Document):
     # ------------------------------------------------------------------
 
     def calculate_inventory_differences(self):
-        """Calculate every line variance and the signed parent total.
+        """Recalculate valuation and inventory variances.
 
-        Unit convention:
-            physical_count       = physical quantity entered in CT
-            qty_in_ct            = ERP theoretical quantity in CT
-            valuation_rate       = stock_valuation / qty_in_ct (value per CT)
+        ``manual_valuation_required`` is the authoritative flag for rows whose
+        theoretical quantity is zero and for which no historical valuation rate
+        exists in Stock Ledger Entry.
 
-        Formulas:
-            quantity_difference  = physical_count - qty_in_ct
-            physical_stock_value = physical_count * valuation_rate
-            difference_amount    = physical_stock_value - stock_valuation
-
-        Stock Entries are still generated in the Item stock UOM. Therefore a
-        CT variance is converted back to stock UOM with ct_conversion_factor.
-
-        A line whose physical_count has not been entered yet is not treated as
-        zero during a draft save. Its calculated values are reset to zero so a
-        partially entered session can safely be saved.
+        Rules:
+        - qty_in_ct != 0: valuation_rate = stock_valuation / qty_in_ct and the
+          manual flag is cleared.
+        - qty_in_ct == 0 + historical SLE rate found: use the latest historical
+          rate converted from stock UOM to CT and clear the manual flag.
+        - qty_in_ct == 0 + no historical rate: set the manual flag and preserve
+          the user's valuation_rate entry instead of overwriting it.
         """
+
+        rows = self.get("table_uawl") or []
+        company = self._get_company() if rows else None
+
+        # Resolve historical rates in one query, rather than one query per row.
+        zero_qty_items = {
+            row.item_code
+            for row in rows
+            if row.item_code
+            and flt(row.qty_in_ct) == 0
+            and not cint(row.get("manual_valuation_required"))
+        }
+        historical_rates = _get_latest_sle_valuation_rates(
+            company=company,
+            inventory_date=self.inventory_date,
+            item_codes=zero_qty_items,
+        ) if zero_qty_items else {}
 
         total_difference_amount = 0.0
 
-        for row in self.get("table_uawl") or []:
+        for row in rows:
+            qty_in_ct = flt(row.qty_in_ct)
+            stock_valuation = flt(row.stock_valuation)
+
+            if qty_in_ct != 0:
+                valuation_rate = flt(stock_valuation / qty_in_ct)
+                row.manual_valuation_required = 0
+            else:
+                if cint(row.get("manual_valuation_required")):
+                    # This is a genuinely manual rate. Never overwrite it on Save.
+                    valuation_rate = flt(row.valuation_rate)
+                else:
+                    base_rate = flt(historical_rates.get(row.item_code))
+                    if base_rate > 0:
+                        valuation_rate = flt(
+                            base_rate * self._get_ct_conversion_factor(row)
+                        )
+                        row.manual_valuation_required = 0
+                    else:
+                        # No historical valuation exists. The checkbox becomes the
+                        # explicit state that unlocks valuation_rate in the client.
+                        row.manual_valuation_required = 1
+                        valuation_rate = flt(row.valuation_rate)
+
+            row.valuation_rate = valuation_rate
+
+            # Blank means "not counted yet", not physical zero.
             if self._is_blank(row.get("physical_count")):
                 row.quantity_difference = 0
                 row.physical_stock_value = 0
@@ -98,21 +137,13 @@ class InventoryCountSession(Document):
                 continue
 
             physical_count = flt(row.physical_count)
-            qty_in_ct = flt(row.qty_in_ct)
-            stock_valuation = flt(row.stock_valuation)
-
-            # valuation_rate is intentionally a CT rate, not a stock-UOM rate.
-            # Normal rule: stock_valuation / qty_in_ct. When theoretical CT qty
-            # is zero the division is impossible; use the current item/warehouse
-            # valuation converted to CT as a fallback so a discovered surplus can
-            # still be valued.
-            valuation_rate = self._get_ct_valuation_rate(row)
-            row.valuation_rate = flt(valuation_rate)
-
             row.quantity_difference = flt(physical_count - qty_in_ct)
             row.physical_stock_value = flt(physical_count * valuation_rate)
+
+            # The value variance follows the quantity variance at the CT rate.
+            # This remains correct when ERP theoretical quantity is zero.
             row.difference_amount = flt(
-                row.physical_stock_value - stock_valuation
+                row.quantity_difference * valuation_rate
             )
 
             total_difference_amount += flt(row.difference_amount)
@@ -153,6 +184,26 @@ class InventoryCountSession(Document):
                 "Physical Count is required before submit for row(s): {0}.".format(
                     ", ".join(missing_rows)
                 )
+            )
+
+    def validate_manual_valuation_rates(self):
+        """Require a manual CT rate only when the checkbox says it is needed."""
+
+        missing = []
+        for row in self.get("table_uawl") or []:
+            if (
+                cint(row.get("manual_valuation_required"))
+                and flt(row.quantity_difference) > 0
+                and flt(row.valuation_rate) <= 0
+            ):
+                missing.append(
+                    f"Row {row.idx} ({row.item_code})"
+                )
+
+        if missing:
+            frappe.throw(
+                "Valuation Rate / CT must be entered manually for:<br>"
+                + "<br>".join(missing)
             )
 
     # ------------------------------------------------------------------
@@ -265,66 +316,16 @@ class InventoryCountSession(Document):
         factor = flt(row.ct_conversion_factor)
         return factor if factor > 0 else 1.0
 
-    @staticmethod
-    def _get_base_uom_fallback_rate(row) -> float:
-        """Return a valuation rate expressed in the Item stock UOM."""
-
-        rate = flt(
-            frappe.db.get_value(
-                "Bin",
-                {"item_code": row.item_code, "warehouse": row.warehouse},
-                "valuation_rate",
-            )
-        )
-        if rate > 0:
-            return rate
-
-        item_rates = frappe.db.get_value(
-            "Item",
-            row.item_code,
-            ["valuation_rate", "last_purchase_rate"],
-            as_dict=True,
-        ) or {}
-
-        return flt(item_rates.get("valuation_rate")) or flt(
-            item_rates.get("last_purchase_rate")
-        )
-
-    def _get_ct_valuation_rate(self, row) -> float:
-        """Return the inventory valuation rate expressed per CT.
-
-        Primary rule required by Inventory Count:
-            CT valuation rate = stock_valuation / qty_in_ct
-
-        If qty_in_ct is zero, the rate cannot be derived from the snapshot. In
-        that edge case, fall back to the current stock-UOM valuation and convert
-        it to CT so a physically found surplus can still receive a value.
-        """
-
-        qty_in_ct = flt(row.qty_in_ct)
-        stock_valuation = flt(row.stock_valuation)
-
-        if qty_in_ct:
-            return flt(stock_valuation / qty_in_ct)
-
-        base_rate = self._get_base_uom_fallback_rate(row)
-        if base_rate > 0:
-            return flt(base_rate * self._get_ct_conversion_factor(row))
-
-        return 0.0
-
     def _get_receipt_rate(self, row) -> float:
-        """Return incoming rate in stock UOM for the generated Stock Receipt.
+        """Return the incoming valuation rate in the Item stock UOM.
 
-        ``row.valuation_rate`` is stored per CT, while Stock Entry is posted in
-        stock UOM. Convert the CT rate back to a stock-UOM rate.
+        The Inventory Count row stores valuation_rate per CT. Stock Entry is
+        created in stock UOM, so only a unit conversion is needed here. There is
+        deliberately no additional custom fallback at Stock Entry creation time.
         """
 
         ct_rate = flt(row.valuation_rate)
-        if ct_rate > 0:
-            return flt(ct_rate / self._get_ct_conversion_factor(row))
-
-        return self._get_base_uom_fallback_rate(row)
+        return flt(ct_rate / self._get_ct_conversion_factor(row)) if ct_rate else 0.0
 
 @frappe.whitelist()
 def get_inventory_snapshot(
@@ -475,7 +476,94 @@ def get_inventory_snapshot(
         for fieldname in numeric_fields:
             row[fieldname] = flt(row.get(fieldname))
 
+    # For zero theoretical quantity, the snapshot ratio cannot provide a rate.
+    # Resolve the latest historical SLE valuation for the Item across the same
+    # Company. If none exists, explicitly mark the row for manual valuation.
+    zero_qty_items = {
+        row.item_code for row in rows if flt(row.qty_in_ct) == 0 and row.item_code
+    }
+    historical_rates = _get_latest_sle_valuation_rates(
+        company=company,
+        inventory_date=inventory_date,
+        item_codes=zero_qty_items,
+    ) if zero_qty_items else {}
+
+    for row in rows:
+        row.manual_valuation_required = 0
+
+        if flt(row.qty_in_ct) != 0:
+            # Keep the rate calculated by the snapshot query.
+            continue
+
+        base_rate = flt(historical_rates.get(row.item_code))
+        if base_rate > 0:
+            row.valuation_rate = flt(
+                base_rate * (flt(row.ct_conversion_factor) or 1.0)
+            )
+            row.manual_valuation_required = 0
+        else:
+            row.valuation_rate = 0
+            row.manual_valuation_required = 1
+
     return rows
+
+
+
+def _get_latest_sle_valuation_rates(
+    company: str,
+    inventory_date: str,
+    item_codes,
+) -> dict[str, float]:
+    """Return the latest positive SLE valuation rate per Item.
+
+    SLE valuation_rate is expressed in the Item stock UOM. The caller converts
+    it to CT using each row's CT conversion factor.
+
+    The search is intentionally Company-wide rather than Warehouse-specific:
+    the business rule is to use the latest valuation known for the Item in the
+    system when the counted warehouse has zero theoretical stock.
+    """
+
+    item_codes = sorted({str(x).strip() for x in (item_codes or []) if x})
+    if not company or not inventory_date or not item_codes:
+        return {}
+
+    placeholders = ", ".join(["%s"] * len(item_codes))
+    rows = frappe.db.sql(
+        f"""
+        SELECT item_code, valuation_rate
+        FROM (
+            SELECT
+                sle.item_code,
+                sle.valuation_rate,
+                ROW_NUMBER() OVER (
+                    PARTITION BY sle.item_code
+                    ORDER BY
+                        sle.posting_date DESC,
+                        sle.posting_time DESC,
+                        sle.creation DESC,
+                        sle.name DESC
+                ) AS row_num
+            FROM `tabStock Ledger Entry` sle
+            WHERE
+                sle.company = %s
+                AND sle.posting_date <= %s
+                AND sle.item_code IN ({placeholders})
+                AND sle.docstatus = 1
+                AND sle.is_cancelled = 0
+                AND COALESCE(sle.valuation_rate, 0) > 0
+        ) latest
+        WHERE latest.row_num = 1
+        """,
+        [company, inventory_date, *item_codes],
+        as_dict=True,
+    )
+
+    return {
+        row.item_code: flt(row.valuation_rate)
+        for row in rows
+        if flt(row.valuation_rate) > 0
+    }
 
 
 
