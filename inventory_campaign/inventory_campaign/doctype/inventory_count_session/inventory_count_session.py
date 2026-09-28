@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import flt
+from frappe.utils import flt, getdate
 
 
 ISSUE_STOCK_ENTRY_TYPE = "Inventory Count Issue"
@@ -25,6 +25,10 @@ class InventoryCountSession(Document):
     """
 
     def validate(self):
+        # A Count Session must stay inside its campaign period, and a Warehouse
+        # may belong to only one active Count Session during that period.
+        self.validate_campaign_period()
+        self.validate_warehouse_period_exclusivity()
         self.calculate_inventory_differences()
 
     def before_submit(self):
@@ -119,6 +123,24 @@ class InventoryCountSession(Document):
     # ------------------------------------------------------------------
     # Validations
     # ------------------------------------------------------------------
+
+    def validate_campaign_period(self):
+        _validate_inventory_date_in_campaign_period(
+            inventory_campaign=self.inventory_campaign,
+            inventory_date=self.inventory_date,
+        )
+
+    def validate_warehouse_period_exclusivity(self):
+        warehouses = _get_selected_session_warehouses(self)
+        if not warehouses:
+            return
+
+        _validate_warehouse_period_exclusivity(
+            inventory_campaign=self.inventory_campaign,
+            warehouses=warehouses,
+            current_session=self.name,
+            lock_warehouses=True,
+        )
 
     def validate_all_lines_are_counted(self):
         missing_rows = []
@@ -408,6 +430,7 @@ def get_inventory_snapshot(
     inventory_date: str,
     branch: str,
     warehouses=None,
+    inventory_count_session: str | None = None,
 ):
     """Return the ERP stock snapshot used to initialise a count session.
 
@@ -431,6 +454,19 @@ def get_inventory_snapshot(
     warehouses = _normalise_warehouse_list(warehouses)
     if not warehouses:
         frappe.throw("Select at least one Warehouse before initialising the session.")
+
+    # Validate before running the snapshot query so Initialize Inventory never
+    # clears/reloads a session with a Warehouse already reserved by another
+    # Count Session in the same campaign period.
+    _validate_inventory_date_in_campaign_period(
+        inventory_campaign=inventory_campaign,
+        inventory_date=inventory_date,
+    )
+    _validate_warehouse_period_exclusivity(
+        inventory_campaign=inventory_campaign,
+        warehouses=warehouses,
+        current_session=inventory_count_session,
+    )
 
     company = frappe.db.get_value(
         "Inventory Campaign", inventory_campaign, "company"
@@ -538,6 +574,215 @@ def get_inventory_snapshot(
             row[fieldname] = flt(row.get(fieldname))
 
     return rows
+
+
+
+def _get_campaign_period(inventory_campaign: str):
+    if not inventory_campaign:
+        frappe.throw("Inventory Campaign is required.")
+
+    campaign = frappe.db.get_value(
+        "Inventory Campaign",
+        inventory_campaign,
+        ["start_date", "end_date"],
+        as_dict=True,
+    )
+    if not campaign:
+        frappe.throw(f"Inventory Campaign {inventory_campaign} does not exist.")
+
+    if not campaign.start_date or not campaign.end_date:
+        frappe.throw(
+            f"Inventory Campaign {inventory_campaign} must have Start Date and End Date."
+        )
+
+    start_date = getdate(campaign.start_date)
+    end_date = getdate(campaign.end_date)
+
+    if start_date > end_date:
+        frappe.throw(
+            "Inventory Campaign {0} has an invalid period: Start Date {1} is after End Date {2}.".format(
+                inventory_campaign,
+                start_date,
+                end_date,
+            )
+        )
+
+    return start_date, end_date
+
+
+def _validate_inventory_date_in_campaign_period(
+    inventory_campaign: str,
+    inventory_date: str,
+):
+    if not inventory_date:
+        frappe.throw("Inventory Date is required.")
+
+    start_date, end_date = _get_campaign_period(inventory_campaign)
+    count_date = getdate(inventory_date)
+
+    if count_date < start_date or count_date > end_date:
+        frappe.throw(
+            "Inventory Date {0} must be between campaign Start Date {1} and End Date {2}.".format(
+                count_date,
+                start_date,
+                end_date,
+            )
+        )
+
+    return start_date, end_date
+
+
+def _get_warehouse_multiselect_config():
+    session_meta = frappe.get_meta("Inventory Count Session")
+    table_field = session_meta.get_field("inventory_count_warehouses")
+
+    if not table_field or table_field.fieldtype not in ("Table MultiSelect", "Table"):
+        frappe.throw(
+            "Inventory Count Session field inventory_count_warehouses is missing or is not a table."
+        )
+
+    child_doctype = table_field.options
+    if not child_doctype:
+        frappe.throw(
+            "Inventory Count Warehouses must reference a child DocType."
+        )
+
+    child_meta = frappe.get_meta(child_doctype)
+    warehouse_link = next(
+        (
+            df
+            for df in child_meta.fields
+            if df.fieldtype == "Link" and df.options == "Warehouse"
+        ),
+        None,
+    )
+
+    if not warehouse_link:
+        frappe.throw(
+            f"{child_doctype} must contain a Link field to Warehouse."
+        )
+
+    return child_doctype, warehouse_link.fieldname
+
+
+def _get_selected_session_warehouses(doc) -> list[str]:
+    _child_doctype, warehouse_field = _get_warehouse_multiselect_config()
+
+    warehouses = []
+    seen = set()
+
+    for row in doc.get("inventory_count_warehouses") or []:
+        warehouse = str(row.get(warehouse_field) or "").strip()
+        if warehouse and warehouse not in seen:
+            seen.add(warehouse)
+            warehouses.append(warehouse)
+
+    return warehouses
+
+
+def _validate_warehouse_period_exclusivity(
+    inventory_campaign: str,
+    warehouses: list[str],
+    current_session: str | None = None,
+    lock_warehouses: bool = False,
+):
+    """Ensure each Warehouse belongs to only one active Count Session in the
+    current campaign period.
+
+    The rule is temporal rather than only campaign-name based: any other
+    non-cancelled Inventory Count Session whose Inventory Date falls between
+    this campaign's Start Date and End Date conflicts with the Warehouse.
+    This still allows the same Warehouse to be counted again in a later,
+    non-overlapping campaign period.
+    """
+
+    warehouses = _normalise_warehouse_list(warehouses)
+    if not warehouses:
+        return
+
+    start_date, end_date = _get_campaign_period(inventory_campaign)
+    child_doctype, warehouse_field = _get_warehouse_multiselect_config()
+
+    # On document Save, lock the selected Warehouse master rows in a stable
+    # order. This serialises concurrent attempts to assign the same Warehouse
+    # to two Count Sessions. The conflict query below then uses a locking
+    # current-read as well, so the second transaction sees the first committed
+    # assignment instead of relying on an older repeatable-read snapshot.
+    if lock_warehouses:
+        warehouses = sorted(warehouses)
+        lock_placeholders = ", ".join(["%s"] * len(warehouses))
+        frappe.db.sql(
+            f"SELECT name FROM `tabWarehouse` WHERE name IN ({lock_placeholders}) ORDER BY name FOR UPDATE",
+            warehouses,
+        )
+
+    # Metadata-derived identifiers are trusted Frappe schema names. Escape
+    # backticks defensively before using them as SQL identifiers.
+    child_table = f"tab{child_doctype}".replace("`", "``")
+    warehouse_column = warehouse_field.replace("`", "``")
+    placeholders = ", ".join(["%s"] * len(warehouses))
+
+    params = [
+        current_session or "",
+        start_date,
+        end_date,
+        *warehouses,
+    ]
+
+    locking_clause = "FOR UPDATE" if lock_warehouses else ""
+
+    conflicts = frappe.db.sql(
+        f"""
+        SELECT
+            wh.`{warehouse_column}` AS warehouse,
+            session.name AS session,
+            session.inventory_campaign AS inventory_campaign,
+            session.inventory_date AS inventory_date
+        FROM `{child_table}` wh
+        INNER JOIN `tabInventory Count Session` session
+            ON session.name = wh.parent
+        INNER JOIN `tabInventory Campaign` campaign
+            ON campaign.name = session.inventory_campaign
+        WHERE
+            wh.parenttype = 'Inventory Count Session'
+            AND wh.parentfield = 'inventory_count_warehouses'
+            AND session.docstatus < 2
+            AND campaign.docstatus < 2
+            AND session.name != %s
+            AND session.inventory_date BETWEEN %s AND %s
+            AND wh.`{warehouse_column}` IN ({placeholders})
+        ORDER BY
+            wh.`{warehouse_column}`,
+            session.inventory_date,
+            session.name
+        {locking_clause}
+        """,
+        params,
+        as_dict=True,
+    )
+
+    if not conflicts:
+        return
+
+    lines = []
+    for conflict in conflicts:
+        lines.append(
+            "{0}: already linked to Count Session {1} (Campaign {2}, Inventory Date {3}).".format(
+                frappe.bold(conflict.warehouse),
+                frappe.bold(conflict.session),
+                conflict.inventory_campaign,
+                conflict.inventory_date,
+            )
+        )
+
+    frappe.throw(
+        "A Warehouse can belong to only one active Inventory Count Session between {0} and {1}.<br>{2}".format(
+            start_date,
+            end_date,
+            "<br>".join(lines),
+        ),
+        title="Warehouse already assigned",
+    )
 
 
 def _normalise_warehouse_list(warehouses) -> list[str]:

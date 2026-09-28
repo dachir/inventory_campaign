@@ -93,6 +93,7 @@ function load_inventory_snapshot(frm, warehouses, detail_field) {
             inventory_date: frm.doc.inventory_date,
             branch: frm.doc.branch,
             warehouses: warehouses,
+            inventory_count_session: frm.is_new() ? null : frm.doc.name,
         },
         freeze: true,
         freeze_message: __("Loading inventory snapshot..."),
