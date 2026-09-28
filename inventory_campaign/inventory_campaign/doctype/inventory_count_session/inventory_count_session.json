@@ -64,7 +64,7 @@
   },
   {
    "fieldname": "difference_amount",
-   "fieldtype": "Float",
+   "fieldtype": "Currency",
    "label": "Difference Amount"
   },
   {
@@ -83,7 +83,7 @@
    "link_fieldname": "custom_inventory_count_session"
   }
  ],
- "modified": "2026-09-28 17:27:16.178329",
+ "modified": "2026-09-28 17:51:49.995864",
  "modified_by": "Administrator",
  "module": "Inventory Campaign",
  "name": "Inventory Count Session",
