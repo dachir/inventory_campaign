@@ -92,6 +92,7 @@ class InventoryCountSession(Document):
             row.item_code
             for row in rows
             if row.item_code
+            and not cint(row.get("manual_entry"))
             and flt(row.qty_in_ct) == 0
             and not cint(row.get("manual_valuation_required"))
         }
@@ -106,6 +107,32 @@ class InventoryCountSession(Document):
         for row in rows:
             qty_in_ct = flt(row.qty_in_ct)
             stock_valuation = flt(row.stock_valuation)
+
+            # A Manual Entry represents stock physically found in a Warehouse but
+            # absent from the ERP snapshot. Its theoretical quantity/value are zero,
+            # while Physical Stock Value is entered by the counter.
+            if cint(row.get("manual_entry")):
+                row.stock_balance = 0
+                row.qty_in_ct = 0
+                row.stock_valuation = 0
+                row.manual_valuation_required = 0
+
+                if self._is_blank(row.get("physical_count")):
+                    row.quantity_difference = 0
+                    row.valuation_rate = 0
+                    row.difference_amount = 0
+                    continue
+
+                physical_count = flt(row.physical_count)
+                physical_stock_value = flt(row.physical_stock_value)
+
+                row.quantity_difference = physical_count
+                row.valuation_rate = flt(
+                    physical_stock_value / physical_count
+                ) if physical_count else 0
+                row.difference_amount = physical_stock_value
+                total_difference_amount += flt(row.difference_amount)
+                continue
 
             if qty_in_ct != 0:
                 valuation_rate = flt(stock_valuation / qty_in_ct)
@@ -129,21 +156,24 @@ class InventoryCountSession(Document):
 
             row.valuation_rate = valuation_rate
 
-            # Blank means "not counted yet", not physical zero.
+            # A blank count is neutral: it does not create a variance and keeps the
+            # physical value aligned with the theoretical book value.
             if self._is_blank(row.get("physical_count")):
                 row.quantity_difference = 0
-                row.physical_stock_value = 0
+                row.physical_stock_value = stock_valuation
                 row.difference_amount = 0
                 continue
 
             physical_count = flt(row.physical_count)
             row.quantity_difference = flt(physical_count - qty_in_ct)
-            row.physical_stock_value = flt(physical_count * valuation_rate)
 
-            # The value variance follows the quantity variance at the CT rate.
-            # This remains correct when ERP theoretical quantity is zero.
+            # Keep the initialized state exactly neutral even when qty_in_ct is zero
+            # but a residual stock valuation exists in the ledger.
             row.difference_amount = flt(
                 row.quantity_difference * valuation_rate
+            )
+            row.physical_stock_value = flt(
+                stock_valuation + row.difference_amount
             )
 
             total_difference_amount += flt(row.difference_amount)
@@ -506,6 +536,113 @@ def get_inventory_snapshot(
             row.manual_valuation_required = 1
 
     return rows
+
+
+@frappe.whitelist()
+def get_manual_inventory_entry_defaults(
+    inventory_campaign: str,
+    inventory_date: str,
+    branch: str,
+    item_code: str,
+    warehouse: str,
+    quality_status: str = "A",
+    selected_warehouses=None,
+    inventory_count_session: str | None = None,
+):
+    """Return trusted ERP defaults for a manually discovered inventory line.
+
+    A manual line is used when an Item/Quality Status combination is physically
+    found in a selected Warehouse but has no line in the initialized ERP snapshot.
+    Quantity and physical value are supplied by the user in the client dialog;
+    this method only returns master-data defaults needed to construct the child row.
+    """
+
+    if not inventory_campaign:
+        frappe.throw("Inventory Campaign is required.")
+    if not inventory_date:
+        frappe.throw("Inventory Date is required.")
+    if not branch:
+        frappe.throw("Branch is required.")
+    if not item_code:
+        frappe.throw("Item is required.")
+    if not warehouse:
+        frappe.throw("Warehouse is required.")
+
+    selected_warehouses = _normalise_warehouse_list(selected_warehouses)
+    if selected_warehouses and warehouse not in selected_warehouses:
+        frappe.throw(
+            f"Warehouse {warehouse} is not selected in Inventory Count Warehouses."
+        )
+
+    _validate_inventory_date_in_campaign_period(
+        inventory_campaign=inventory_campaign,
+        inventory_date=inventory_date,
+    )
+    _validate_warehouse_period_exclusivity(
+        inventory_campaign=inventory_campaign,
+        warehouses=[warehouse],
+        current_session=inventory_count_session,
+    )
+
+    company = frappe.db.get_value(
+        "Inventory Campaign", inventory_campaign, "company"
+    )
+    if not company:
+        frappe.throw(f"Inventory Campaign {inventory_campaign} has no Company.")
+
+    warehouse_data = frappe.db.get_value(
+        "Warehouse",
+        warehouse,
+        ["company", "branch", "account", "parent_warehouse"],
+        as_dict=True,
+    )
+    if not warehouse_data:
+        frappe.throw(f"Warehouse {warehouse} does not exist.")
+    if warehouse_data.company != company:
+        frappe.throw(f"Warehouse {warehouse} does not belong to {company}.")
+    if warehouse_data.branch and warehouse_data.branch != branch:
+        frappe.throw(f"Warehouse {warehouse} does not belong to Branch {branch}.")
+
+    item = frappe.db.get_value(
+        "Item",
+        item_code,
+        ["item_group", "item_name", "stock_uom", "is_stock_item", "disabled"],
+        as_dict=True,
+    )
+    if not item:
+        frappe.throw(f"Item {item_code} does not exist.")
+    if cint(item.disabled):
+        frappe.throw(f"Item {item_code} is disabled.")
+    if not cint(item.is_stock_item):
+        frappe.throw(f"Item {item_code} is not a Stock Item.")
+
+    stock_account = warehouse_data.account
+    if not stock_account and warehouse_data.parent_warehouse:
+        stock_account = frappe.db.get_value(
+            "Warehouse", warehouse_data.parent_warehouse, "account"
+        )
+
+    ct_conversion_factor = frappe.db.get_value(
+        "UOM Conversion Detail",
+        {
+            "parent": item_code,
+            "parenttype": "Item",
+            "parentfield": "uoms",
+            "uom": "CT",
+        },
+        "conversion_factor",
+    )
+
+    return {
+        "item_group": item.item_group,
+        "item_code": item_code,
+        "item_name": item.item_name,
+        "stock_uom": item.stock_uom,
+        "warehouse": warehouse,
+        "quality_status": quality_status or "A",
+        "stock_account": stock_account,
+        "ct_conversion_factor": flt(ct_conversion_factor) or 1.0,
+    }
 
 
 
