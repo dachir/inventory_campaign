@@ -294,94 +294,126 @@ function initialize_inventory(frm) {
     });
 }
 
-function load_inventory_snapshot(frm, warehouses, detail_field) {
-    frappe.call({
-        method: "inventory_campaign.inventory_campaign.doctype.inventory_count_session.inventory_count_session.get_inventory_snapshot",
-        args: {
-            inventory_campaign: frm.doc.inventory_campaign,
-            inventory_date: frm.doc.inventory_date,
-            branch: frm.doc.branch,
-            warehouses: warehouses,
-            inventory_count_session: frm.is_new() ? null : frm.doc.name,
-        },
-        freeze: true,
-        freeze_message: __("Loading inventory snapshot..."),
-        callback(r) {
-            if (r.exc) {
-                return;
-            }
+function fetch_inventory_snapshot(frm, warehouses, freeze_message) {
+    return new Promise((resolve, reject) => {
+        frappe.call({
+            method: "inventory_campaign.inventory_campaign.doctype.inventory_count_session.inventory_count_session.get_inventory_snapshot",
+            args: {
+                inventory_campaign: frm.doc.inventory_campaign,
+                inventory_date: frm.doc.inventory_date,
+                branch: frm.doc.branch,
+                warehouses: warehouses,
+                inventory_count_session: frm.is_new() ? null : frm.doc.name,
+            },
+            freeze: true,
+            freeze_message: freeze_message || __("Loading inventory snapshot..."),
+            callback(r) {
+                if (r.exc) {
+                    reject(r.exc);
+                    return;
+                }
 
-            const rows = r.message || [];
-
-            // Clear only after the server query succeeds.
-            frm.clear_table(detail_field);
-
-            rows.forEach((data) => {
-                const row = frm.add_child(detail_field);
-
-                row.item_group = data.item_group;
-                row.item_code = data.item_code;
-                row.item_name = data.item_name;
-                row.stock_uom = data.stock_uom;
-                row.warehouse = data.warehouse;
-                row.quality_status = data.quality_status;
-                row.stock_account = data.stock_account;
-                row.stock_balance = data.stock_balance;
-                row.ct_conversion_factor = data.ct_conversion_factor;
-                row.qty_in_ct = data.qty_in_ct;
-                row.valuation_rate = data.valuation_rate;
-                row.manual_valuation_required = cint(data.manual_valuation_required);
-                row.manual_entry = 0;
-                row.stock_valuation = data.stock_valuation;
-
-                // Initialization is deliberately neutral: the physical values start
-                // equal to the ERP snapshot and only user changes create a variance.
-                row.physical_count = data.qty_in_ct;
-                row.quantity_difference = 0;
-                row.physical_stock_value = data.stock_valuation;
-                row.difference_amount = 0;
-            });
-
-            frm.set_value("difference_amount", 0);
-
-            frm.refresh_field(detail_field);
-            frm.refresh_field("difference_amount");
-            frm.dirty();
-
-            setup_manual_valuation_grid_ui(frm);
-            refresh_manual_valuation_grid_rows(frm);
-
-            const manual_count = rows.filter(
-                (row) => cint(row.manual_valuation_required)
-            ).length;
-
-            // Save the initialized rows first, then reload the document
-            // from ERPNext so the complete screen reflects persisted values.
-            frm.save()
-                .then(() => frm.reload_doc())
-                .then(() => {
-                    frappe.show_alert({
-                        message: manual_count
-                            ? __(
-                                "{0} line(s) loaded and saved. {1} line(s) require a manual valuation rate.",
-                                [rows.length, manual_count]
-                            )
-                            : __(
-                                "{0} inventory line(s) loaded and saved.",
-                                [rows.length]
-                            ),
-                        indicator: manual_count ? "orange" : "green",
-                    });
-                });
-        },
+                resolve(r.message || []);
+            },
+            error(r) {
+                reject(r);
+            },
+        });
     });
+}
+
+async function load_inventory_snapshot(frm, warehouses, detail_field) {
+    let rows;
+
+    try {
+        rows = await fetch_inventory_snapshot(
+            frm,
+            warehouses,
+            __("Loading inventory snapshot...")
+        );
+    } catch (error) {
+        return;
+    }
+
+    // Clear only after the server query succeeds.
+    frm.clear_table(detail_field);
+
+    rows.forEach((data) => {
+        const row = frm.add_child(detail_field);
+
+        apply_snapshot_values_to_row(row, data);
+        row.manual_entry = 0;
+
+        // Initialization is deliberately neutral: the physical values start
+        // equal to the ERP snapshot and only user changes create a variance.
+        row.physical_count = data.qty_in_ct;
+        row.quantity_difference = 0;
+        row.physical_stock_value = data.stock_valuation;
+        row.difference_amount = 0;
+    });
+
+    frm.set_value("difference_amount", 0);
+
+    frm.refresh_field(detail_field);
+    frm.refresh_field("difference_amount");
+    frm.dirty();
+
+    setup_manual_valuation_grid_ui(frm);
+    refresh_manual_valuation_grid_rows(frm);
+
+    const manual_count = rows.filter(
+        (row) => cint(row.manual_valuation_required)
+    ).length;
+
+    // Save the initialized rows first, then reload the document
+    // from ERPNext so the complete screen reflects persisted values.
+    await frm.save();
+    await frm.reload_doc();
+
+    frappe.show_alert({
+        message: manual_count
+            ? __(
+                "{0} line(s) loaded and saved. {1} line(s) require a manual valuation rate.",
+                [rows.length, manual_count]
+            )
+            : __(
+                "{0} inventory line(s) loaded and saved.",
+                [rows.length]
+            ),
+        indicator: manual_count ? "orange" : "green",
+    });
+}
+
+function apply_snapshot_values_to_row(row, data) {
+    row.item_group = data.item_group;
+    row.item_code = data.item_code;
+    row.item_name = data.item_name;
+    row.stock_uom = data.stock_uom;
+    row.warehouse = data.warehouse;
+    row.quality_status = data.quality_status || "A";
+    row.stock_account = data.stock_account;
+    row.stock_balance = data.stock_balance;
+    row.ct_conversion_factor = data.ct_conversion_factor;
+    row.qty_in_ct = data.qty_in_ct;
+    row.valuation_rate = data.valuation_rate;
+    row.manual_valuation_required = cint(data.manual_valuation_required);
+    row.stock_valuation = data.stock_valuation;
+}
+
+function inventory_row_key(row) {
+    return [
+        row.item_code || "",
+        row.warehouse || "",
+        row.quality_status || "A",
+    ].join("\u001f");
 }
 
 async function recalculate_inventory_values(frm) {
     const detail_field = get_inventory_detail_field(frm);
-    const rows = frm.doc[detail_field] || [];
+    const current_rows = frm.doc[detail_field] || [];
+    const warehouses = get_selected_warehouses(frm);
 
-    if (!rows.length) {
+    if (!current_rows.length) {
         frappe.msgprint({
             title: __("Nothing to Recalculate"),
             message: __("There are no inventory detail lines to recalculate."),
@@ -390,23 +422,111 @@ async function recalculate_inventory_values(frm) {
         return;
     }
 
-    // Reuse the existing row calculation logic for every line, then update
-    // the signed Difference Amount on the session header.
-    recalculate_header_difference_amount(frm);
+    if (!frm.doc.inventory_campaign || !frm.doc.inventory_date || !frm.doc.branch) {
+        frappe.msgprint({
+            title: __("Missing Session Information"),
+            message: __("Select Inventory Campaign, Inventory Date and Branch before recalculating values."),
+            indicator: "red",
+        });
+        return;
+    }
 
+    if (!warehouses.length) {
+        frappe.msgprint({
+            title: __("Missing Warehouses"),
+            message: __("Select at least one Warehouse in Inventory Count Warehouses."),
+            indicator: "red",
+        });
+        return;
+    }
+
+    let snapshot_rows;
+
+    try {
+        // Recalculate Values starts from exactly the same ERP snapshot request
+        // as Initialize Inventory. It only refreshes values on existing rows;
+        // it does not add/remove lines or erase physical counts.
+        snapshot_rows = await fetch_inventory_snapshot(
+            frm,
+            warehouses,
+            __("Recalculating inventory values from ERP snapshot...")
+        );
+    } catch (error) {
+        return;
+    }
+
+    const snapshot_by_key = new Map();
+    snapshot_rows.forEach((data) => {
+        snapshot_by_key.set(inventory_row_key(data), data);
+    });
+
+    let refreshed_count = 0;
+    let unmatched_count = 0;
+
+    current_rows.forEach((row) => {
+        // Manual Entry lines are user-entered physical findings and must not be
+        // replaced by theoretical ERP data during a value recalculation.
+        if (cint(row.manual_entry)) {
+            recalculate_inventory_row_values(row);
+            return;
+        }
+
+        const data = snapshot_by_key.get(inventory_row_key(row));
+        if (!data) {
+            // Keep the line intact if the fresh snapshot does not contain it.
+            // Initialize Inventory remains the operation that creates/rebuilds lines.
+            unmatched_count += 1;
+            recalculate_inventory_row_values(row);
+            return;
+        }
+
+        const previous_manual_rate = to_number(row.valuation_rate);
+
+        apply_snapshot_values_to_row(row, data);
+        row.manual_entry = 0;
+
+        // If ERP still has no valuation for this zero-stock line, preserve a
+        // manual rate already entered by the user.
+        if (
+            cint(data.manual_valuation_required) &&
+            previous_manual_rate > 0
+        ) {
+            row.valuation_rate = previous_manual_rate;
+        }
+
+        // physical_count is deliberately untouched.
+        recalculate_inventory_row_values(row);
+        refreshed_count += 1;
+    });
+
+    recalculate_header_difference_amount(frm);
     frm.refresh_field(detail_field);
     frm.refresh_field("difference_amount");
     refresh_manual_valuation_grid_rows(frm);
     frm.dirty();
 
-    // Persist the recalculated values, then reload from ERPNext so the screen
-    // immediately reflects exactly what was saved by the server validate().
+    const manual_count = current_rows.filter(
+        (row) => cint(row.manual_valuation_required)
+    ).length;
+
     await frm.save();
     await frm.reload_doc();
 
+    const warning_suffix = unmatched_count
+        ? __(" {0} line(s) were not found in the refreshed snapshot and were kept unchanged.", [unmatched_count])
+        : "";
+
     frappe.show_alert({
-        message: __("{0} inventory line(s) recalculated and saved.", [rows.length]),
-        indicator: "green",
+        message: manual_count
+            ? __(
+                "{0} line(s) refreshed from the ERP snapshot. {1} line(s) require a manual valuation rate.",
+                [refreshed_count, manual_count]
+            ) + warning_suffix
+            : __(
+                "{0} line(s) refreshed from the ERP snapshot.",
+                [refreshed_count]
+            ) + warning_suffix,
+        indicator: manual_count || unmatched_count ? "orange" : "green",
     });
 }
 

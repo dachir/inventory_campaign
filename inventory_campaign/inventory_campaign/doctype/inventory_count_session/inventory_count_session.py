@@ -383,8 +383,8 @@ def get_inventory_snapshot(
       - exact warehouses selected in ``inventory_count_warehouses``
       - Stock Ledger entries posted up to ``inventory_date``
 
-    This method only reads data. Clearing/replacing ``table_uawl`` is done by
-    the client after the user explicitly confirms the destructive action.
+    This method only reads data. Initialization and value recalculation both
+    use this same snapshot source so the ERP theoretical values stay consistent.
     """
 
     if not inventory_campaign:
@@ -418,6 +418,27 @@ def get_inventory_snapshot(
         frappe.throw(
             f"Inventory Campaign {inventory_campaign} has no Company."
         )
+
+    return _query_inventory_snapshot(
+        company=company,
+        inventory_date=inventory_date,
+        branch=branch,
+        warehouses=warehouses,
+    )
+
+
+def _query_inventory_snapshot(
+    company: str,
+    inventory_date: str,
+    branch: str,
+    warehouses: list[str],
+):
+    """Run the single authoritative inventory snapshot query.
+
+    Both Initialize Inventory and Recalculate Values consume the result of this
+    query through ``get_inventory_snapshot``. Keep quantity, valuation and
+    Quality Status snapshot logic in this one place.
+    """
 
     placeholders = ", ".join(["%s"] * len(warehouses))
 
