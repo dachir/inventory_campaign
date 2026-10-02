@@ -94,6 +94,7 @@ class InventoryCountSession(Document):
             if row.item_code
             and not cint(row.get("manual_entry"))
             and flt(row.qty_in_ct) == 0
+            and flt(row.valuation_rate) <= 0
             and not cint(row.get("manual_valuation_required"))
         }
         historical_rates = _get_latest_sle_valuation_rates(
@@ -138,9 +139,17 @@ class InventoryCountSession(Document):
                 valuation_rate = flt(stock_valuation / qty_in_ct)
                 row.manual_valuation_required = 0
             else:
+                current_rate = flt(row.valuation_rate)
+
                 if cint(row.get("manual_valuation_required")):
                     # This is a genuinely manual rate. Never overwrite it on Save.
-                    valuation_rate = flt(row.valuation_rate)
+                    valuation_rate = current_rate
+                elif current_rate > 0:
+                    # The snapshot already supplied the Item + Warehouse valuation
+                    # rate. Keep it even when this specific Quality Status quantity
+                    # is zero so valuation stays independent of Quality Status.
+                    valuation_rate = current_rate
+                    row.manual_valuation_required = 0
                 else:
                     base_rate = flt(historical_rates.get(row.item_code))
                     if base_rate > 0:
@@ -149,10 +158,10 @@ class InventoryCountSession(Document):
                         )
                         row.manual_valuation_required = 0
                     else:
-                        # No historical valuation exists. The checkbox becomes the
-                        # explicit state that unlocks valuation_rate in the client.
+                        # No warehouse or historical valuation exists. The checkbox
+                        # becomes the explicit state that unlocks valuation_rate.
                         row.manual_valuation_required = 1
-                        valuation_rate = flt(row.valuation_rate)
+                        valuation_rate = current_rate
 
             row.valuation_rate = valuation_rate
 
@@ -823,8 +832,8 @@ def get_inventory_snapshot(
         company,           # CTE company
         company,           # SLE company
         inventory_date,
-        branch,
-        *warehouses,
+        *warehouses,       # BaseSLE warehouse IN (...)
+        branch,            # Final branch filter
     ]
 
     rows = frappe.db.sql(sql_query, params, as_dict=True)
@@ -845,7 +854,11 @@ def get_inventory_snapshot(
     # Resolve the latest historical SLE valuation for the Item across the same
     # Company. If none exists, explicitly mark the row for manual valuation.
     zero_qty_items = {
-        row.item_code for row in rows if flt(row.qty_in_ct) == 0 and row.item_code
+        row.item_code
+        for row in rows
+        if row.item_code
+        and flt(row.qty_in_ct) == 0
+        and flt(row.valuation_rate) <= 0
     }
     historical_rates = _get_latest_sle_valuation_rates(
         company=company,
@@ -857,7 +870,12 @@ def get_inventory_snapshot(
         row.manual_valuation_required = 0
 
         if flt(row.qty_in_ct) != 0:
-            # Keep the rate calculated by the snapshot query.
+            # Keep the Item + Warehouse rate calculated by the snapshot query.
+            continue
+
+        if flt(row.valuation_rate) > 0:
+            # A warehouse-level rate already exists. Keep it for this zero-quantity
+            # Quality Status instead of replacing it with a Quality-dependent rate.
             continue
 
         base_rate = flt(historical_rates.get(row.item_code))

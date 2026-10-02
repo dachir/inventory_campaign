@@ -6,9 +6,15 @@ frappe.ui.form.on("Inventory Count Session", {
             return;
         }
 
+        const inventory_group = __("Inventory");
+
         frm.add_custom_button(__("Initialize Inventory"), () => {
             initialize_inventory(frm);
-        });
+        }, inventory_group);
+
+        frm.add_custom_button(__("Recalculate Values"), () => {
+            recalculate_inventory_values(frm);
+        }, inventory_group);
 
         frm.add_custom_button(__("Add Manual Entry"), () => {
             add_manual_inventory_entry(frm);
@@ -337,6 +343,7 @@ function load_inventory_snapshot(frm, warehouses, detail_field) {
             });
 
             frm.set_value("difference_amount", 0);
+
             frm.refresh_field(detail_field);
             frm.refresh_field("difference_amount");
             frm.dirty();
@@ -348,13 +355,58 @@ function load_inventory_snapshot(frm, warehouses, detail_field) {
                 (row) => cint(row.manual_valuation_required)
             ).length;
 
-            frappe.show_alert({
-                message: manual_count
-                    ? __("{0} line(s) loaded. {1} line(s) require a manual valuation rate.", [rows.length, manual_count])
-                    : __("{0} inventory line(s) loaded. Save the session to persist them.", [rows.length]),
-                indicator: manual_count ? "orange" : "green",
-            });
+            // Save the initialized rows first, then reload the document
+            // from ERPNext so the complete screen reflects persisted values.
+            frm.save()
+                .then(() => frm.reload_doc())
+                .then(() => {
+                    frappe.show_alert({
+                        message: manual_count
+                            ? __(
+                                "{0} line(s) loaded and saved. {1} line(s) require a manual valuation rate.",
+                                [rows.length, manual_count]
+                            )
+                            : __(
+                                "{0} inventory line(s) loaded and saved.",
+                                [rows.length]
+                            ),
+                        indicator: manual_count ? "orange" : "green",
+                    });
+                });
         },
+    });
+}
+
+async function recalculate_inventory_values(frm) {
+    const detail_field = get_inventory_detail_field(frm);
+    const rows = frm.doc[detail_field] || [];
+
+    if (!rows.length) {
+        frappe.msgprint({
+            title: __("Nothing to Recalculate"),
+            message: __("There are no inventory detail lines to recalculate."),
+            indicator: "orange",
+        });
+        return;
+    }
+
+    // Reuse the existing row calculation logic for every line, then update
+    // the signed Difference Amount on the session header.
+    recalculate_header_difference_amount(frm);
+
+    frm.refresh_field(detail_field);
+    frm.refresh_field("difference_amount");
+    refresh_manual_valuation_grid_rows(frm);
+    frm.dirty();
+
+    // Persist the recalculated values, then reload from ERPNext so the screen
+    // immediately reflects exactly what was saved by the server validate().
+    await frm.save();
+    await frm.reload_doc();
+
+    frappe.show_alert({
+        message: __("{0} inventory line(s) recalculated and saved.", [rows.length]),
+        indicator: "green",
     });
 }
 
