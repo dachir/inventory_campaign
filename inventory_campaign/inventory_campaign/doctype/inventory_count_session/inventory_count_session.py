@@ -53,14 +53,14 @@ class InventoryCountSession(Document):
         if issue_rows:
             self.create_inventory_stock_entry(
                 stock_entry_type=ISSUE_STOCK_ENTRY_TYPE,
-                movement="issue",
+                purpose="Material Issue",
                 rows=issue_rows,
             )
 
         if receipt_rows:
             self.create_inventory_stock_entry(
                 stock_entry_type=RECEIPT_STOCK_ENTRY_TYPE,
-                movement="receipt",
+                purpose="Material Receipt",
                 rows=receipt_rows,
             )
 
@@ -243,7 +243,7 @@ class InventoryCountSession(Document):
     def create_inventory_stock_entry(
         self,
         stock_entry_type: str,
-        movement: str,
+        purpose: str,
         rows: list,
     ):
         """Create one Draft Stock Entry and let ERPNext validate it normally.
@@ -259,6 +259,7 @@ class InventoryCountSession(Document):
         stock_entry = frappe.new_doc("Stock Entry")
         stock_entry.company = company
         stock_entry.stock_entry_type = stock_entry_type
+        stock_entry.purpose = purpose
         stock_entry.posting_date = self.inventory_date
 
         # Traceability only; no custom validation around this field.
@@ -289,7 +290,7 @@ class InventoryCountSession(Document):
                 "conversion_factor": 1,
             }
 
-            if movement == "issue":
+            if purpose == "Material Issue":
                 item["s_warehouse"] = row.warehouse
             else:
                 item["t_warehouse"] = row.warehouse
