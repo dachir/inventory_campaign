@@ -443,18 +443,17 @@ def _query_inventory_snapshot(
     placeholders = ", ".join(["%s"] * len(warehouses))
 
     sql_query = f"""
-    WITH RECURSIVE
+    WITH
 
     /* =========================================================
-    1. Warehouse metadata
+    1. Warehouses réellement concernés
     ========================================================= */
-    WarehouseStockAccount AS (
+    WarehouseScope AS (
         SELECT
             w.name AS warehouse,
             w.branch AS branch,
             CASE
-                WHEN w.account IS NOT NULL
-                    AND w.account != ''
+                WHEN w.account IS NOT NULL AND w.account != ''
                 THEN w.account
                 ELSE pw.account
             END AS stock_account
@@ -462,25 +461,22 @@ def _query_inventory_snapshot(
         FROM `tabWarehouse` w
 
         LEFT JOIN `tabWarehouse` pw
-            ON w.parent_warehouse = pw.name
+            ON pw.name = w.parent_warehouse
 
         WHERE
             w.company = %s
+            AND w.branch = %s
+            AND w.name IN ({placeholders})
     ),
 
 
     /* =========================================================
-    2. All Stock Ledger Entries used by the inventory snapshot.
+    2. Quantité par Item + Warehouse + Quality Status
 
-    IMPORTANT:
-    quality_status remains on the SLE because it will be used
-    only for the quantity split.
-
-    Valuation will NOT be calculated by quality_status.
+    quality_status affecte uniquement la quantité.
     ========================================================= */
-    BaseSLE AS (
+    QualityStock AS (
         SELECT
-            sle.name,
             sle.item_code,
             sle.warehouse,
 
@@ -489,282 +485,106 @@ def _query_inventory_snapshot(
                 'A'
             ) AS quality_status,
 
-            sle.posting_date,
-            sle.posting_time,
-            sle.creation,
-
-            sle.voucher_type,
-            sle.voucher_no,
-
-            sle.actual_qty,
-            sle.qty_after_transaction,
-
-            sle.valuation_rate,
-            sle.stock_value,
-            sle.stock_value_difference,
-
-            sle.is_adjustment_entry,
-            sle.batch_no,
-            sle.serial_no,
-            sle.serial_and_batch_bundle,
-
-            ROW_NUMBER() OVER (
-                PARTITION BY
-                    sle.item_code,
-                    sle.warehouse
-
-                ORDER BY
-                    sle.posting_date,
-                    sle.posting_time,
-                    sle.creation,
-                    sle.name
-            ) AS seq
+            SUM(sle.actual_qty) AS stock_balance
 
         FROM `tabStock Ledger Entry` sle
 
+        INNER JOIN WarehouseScope ws
+            ON ws.warehouse = sle.warehouse
+
         WHERE
             sle.company = %s
-
             AND sle.posting_date <= %s
-
-            AND sle.warehouse IN ({placeholders})
-
             AND sle.docstatus = 1
             AND sle.is_cancelled = 0
+
+        GROUP BY
+            sle.item_code,
+            sle.warehouse,
+            COALESCE(NULLIF(sle.quality_status, ''), 'A')
     ),
 
 
     /* =========================================================
-    3. Rebuild the Item + Warehouse balance.
+    3. Dernière SLE par Item + Warehouse
 
-    This calculation deliberately ignores quality_status.
-
-    quality_status therefore cannot influence valuation_rate.
+    Pas de quality_status dans le PARTITION BY.
     ========================================================= */
-    RunningBalance AS (
-
-        /* ----- First SLE for Item + Warehouse ----- */
-
-        SELECT
-            b.item_code,
-            b.warehouse,
-            b.seq,
-
-            b.posting_date,
-            b.posting_time,
-            b.creation,
-            b.name,
-
-            b.voucher_type,
-            b.is_adjustment_entry,
-
-            CASE
-                WHEN
-                    b.voucher_type = 'Stock Reconciliation'
-                    AND COALESCE(b.is_adjustment_entry, 0) = 0
-                    AND (
-                        b.batch_no IS NULL
-                        OR b.batch_no = ''
-                        OR b.serial_no IS NOT NULL
-                        OR b.serial_and_batch_bundle IS NOT NULL
-                    )
-                THEN b.qty_after_transaction
-
-                ELSE b.actual_qty
-            END AS bal_qty,
-
-            CASE
-                WHEN
-                    b.voucher_type = 'Stock Reconciliation'
-                    AND COALESCE(b.is_adjustment_entry, 0) = 0
-                    AND (
-                        b.batch_no IS NULL
-                        OR b.batch_no = ''
-                        OR b.serial_no IS NOT NULL
-                        OR b.serial_and_batch_bundle IS NOT NULL
-                    )
-                THEN b.stock_value
-
-                ELSE b.stock_value_difference
-            END AS bal_val,
-
-            b.valuation_rate AS last_valuation_rate
-
-        FROM BaseSLE b
-
-        WHERE
-            b.seq = 1
-
-
-        UNION ALL
-
-
-        /* ----- Remaining SLE ----- */
-
-        SELECT
-            b.item_code,
-            b.warehouse,
-            b.seq,
-
-            b.posting_date,
-            b.posting_time,
-            b.creation,
-            b.name,
-
-            b.voucher_type,
-            b.is_adjustment_entry,
-
-            CASE
-                WHEN
-                    b.voucher_type = 'Stock Reconciliation'
-                    AND COALESCE(b.is_adjustment_entry, 0) = 0
-                    AND (
-                        b.batch_no IS NULL
-                        OR b.batch_no = ''
-                        OR b.serial_no IS NOT NULL
-                        OR b.serial_and_batch_bundle IS NOT NULL
-                    )
-                THEN
-                    b.qty_after_transaction
-
-                ELSE
-                    r.bal_qty + b.actual_qty
-            END AS bal_qty,
-
-            CASE
-                WHEN
-                    b.voucher_type = 'Stock Reconciliation'
-                    AND COALESCE(b.is_adjustment_entry, 0) = 0
-                    AND (
-                        b.batch_no IS NULL
-                        OR b.batch_no = ''
-                        OR b.serial_no IS NOT NULL
-                        OR b.serial_and_batch_bundle IS NOT NULL
-                    )
-                THEN
-                    b.stock_value
-
-                ELSE
-                    r.bal_val + b.stock_value_difference
-            END AS bal_val,
-
-            b.valuation_rate AS last_valuation_rate
-
-        FROM RunningBalance r
-
-        INNER JOIN BaseSLE b
-            ON b.item_code = r.item_code
-            AND b.warehouse = r.warehouse
-            AND b.seq = r.seq + 1
-    ),
-
-
-    /* =========================================================
-    4. Final ERPNext balance per Item + Warehouse.
-
-    Still NO quality_status here.
-    ========================================================= */
-    FinalWarehouseBalance AS (
+    LastSLE AS (
         SELECT
             x.item_code,
             x.warehouse,
-
-            x.bal_qty AS warehouse_stock_qty,
-            x.bal_val AS warehouse_stock_value,
-
-            x.last_valuation_rate
+            x.qty_after_transaction AS warehouse_stock_qty,
+            x.stock_value AS warehouse_stock_value,
+            x.valuation_rate AS last_valuation_rate
 
         FROM (
             SELECT
-                rb.*,
+                sle.item_code,
+                sle.warehouse,
+                sle.qty_after_transaction,
+                sle.stock_value,
+                sle.valuation_rate,
 
                 ROW_NUMBER() OVER (
                     PARTITION BY
-                        rb.item_code,
-                        rb.warehouse
-
+                        sle.item_code,
+                        sle.warehouse
                     ORDER BY
-                        rb.seq DESC
+                        sle.posting_date DESC,
+                        sle.posting_time DESC,
+                        sle.creation DESC,
+                        sle.name DESC
                 ) AS rn
 
-            FROM RunningBalance rb
+            FROM `tabStock Ledger Entry` sle
+
+            INNER JOIN WarehouseScope ws
+                ON ws.warehouse = sle.warehouse
+
+            WHERE
+                sle.company = %s
+                AND sle.posting_date <= %s
+                AND sle.docstatus = 1
+                AND sle.is_cancelled = 0
         ) x
 
-        WHERE
-            x.rn = 1
+        WHERE x.rn = 1
     ),
 
 
     /* =========================================================
-    5. Quantity split by Quality Status.
+    4. Un seul taux de valorisation Item + Warehouse
 
-    ONLY quantity is split by Quality Status.
-    No valuation is calculated here.
-    ========================================================= */
-    QualityStock AS (
-        SELECT
-            item_code,
-            warehouse,
-            quality_status,
-
-            SUM(actual_qty) AS stock_balance
-
-        FROM BaseSLE
-
-        GROUP BY
-            item_code,
-            warehouse,
-            quality_status
-    ),
-
-
-    /* =========================================================
-    6. One valuation rate per Item + Warehouse.
-
-    This is the key change.
-
-    The rate has NO Quality Status dimension.
+    Complètement indépendant du Quality Status.
     ========================================================= */
     WarehouseValuation AS (
         SELECT
             item_code,
             warehouse,
-
             warehouse_stock_qty,
             warehouse_stock_value,
 
             CASE
                 WHEN COALESCE(warehouse_stock_qty, 0) <> 0
-                THEN
-                    warehouse_stock_value
-                    / warehouse_stock_qty
+                THEN warehouse_stock_value / warehouse_stock_qty
 
-                ELSE
-                    last_valuation_rate
+                ELSE last_valuation_rate
             END AS stock_uom_valuation_rate
 
-        FROM FinalWarehouseBalance
+        FROM LastSLE
     )
 
 
-    /* =========================================================
-    7. Inventory Count Session Detail
-    ========================================================= */
     SELECT
         i.item_group AS item_group,
-
         qs.item_code AS item_code,
-
         i.item_name AS item_name,
-
         i.stock_uom AS stock_uom,
 
         ws.branch AS branch,
-
         qs.warehouse AS warehouse,
-
         qs.quality_status AS quality_status,
-
         ws.stock_account AS stock_account,
 
         qs.stock_balance AS stock_balance,
@@ -774,38 +594,31 @@ def _query_inventory_snapshot(
             1
         ) AS ct_conversion_factor,
 
-        (
-            qs.stock_balance
-            /
-            COALESCE(
-                NULLIF(ucd.conversion_factor, 0),
-                1
-            )
+        qs.stock_balance
+        /
+        COALESCE(
+            NULLIF(ucd.conversion_factor, 0),
+            1
         ) AS qty_in_ct,
 
 
-        /* =====================================================
-        Warehouse rate converted from Stock UOM to CT.
+        /* ---------------------------------------------------------
+        Rate Stock UOM -> Rate CT
 
-        SAME RATE for every Quality Status of this
-        Item + Warehouse.
-        ===================================================== */
-        (
-            wv.stock_uom_valuation_rate
-            *
-            COALESCE(
-                NULLIF(ucd.conversion_factor, 0),
-                1
-            )
+        Identique pour A, Q, R... du même Item + Warehouse.
+        --------------------------------------------------------- */
+        wv.stock_uom_valuation_rate
+        *
+        COALESCE(
+            NULLIF(ucd.conversion_factor, 0),
+            1
         ) AS valuation_rate,
 
 
-        /* =====================================================
-        Allocate warehouse value to Quality Status.
-
-        Rate remains Item + Warehouse based.
-        Quality Status only determines the quantity share.
-        ===================================================== */
+        /* ---------------------------------------------------------
+        Allocation de la valeur warehouse aux Quality Status
+        proportionnellement aux quantités.
+        --------------------------------------------------------- */
         CASE
             WHEN COALESCE(wv.warehouse_stock_qty, 0) <> 0
             THEN
@@ -815,7 +628,6 @@ def _query_inventory_snapshot(
                     qs.stock_balance
                     / wv.warehouse_stock_qty
                 )
-
             ELSE 0
         END AS stock_valuation
 
@@ -823,23 +635,20 @@ def _query_inventory_snapshot(
     FROM QualityStock qs
 
     INNER JOIN `tabItem` i
-        ON qs.item_code = i.item_code
+        ON i.item_code = qs.item_code
 
-    LEFT JOIN WarehouseStockAccount ws
-        ON qs.warehouse = ws.warehouse
+    INNER JOIN WarehouseScope ws
+        ON ws.warehouse = qs.warehouse
 
     LEFT JOIN WarehouseValuation wv
-        ON qs.item_code = wv.item_code
-        AND qs.warehouse = wv.warehouse
+        ON wv.item_code = qs.item_code
+        AND wv.warehouse = qs.warehouse
 
     LEFT JOIN `tabUOM Conversion Detail` ucd
-        ON qs.item_code = ucd.parent
+        ON ucd.parent = qs.item_code
         AND ucd.parenttype = 'Item'
         AND ucd.parentfield = 'uoms'
         AND ucd.uom = 'CT'
-
-    WHERE
-        ws.branch = %s
 
     ORDER BY
         ws.branch,
