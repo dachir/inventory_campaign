@@ -659,11 +659,13 @@ def _query_inventory_snapshot(
     """
 
     params = [
-        company,           # CTE company
-        company,           # SLE company
-        inventory_date,
-        *warehouses,       # BaseSLE warehouse IN (...)
-        branch,            # Final branch filter
+        company,           # WarehouseScope: company
+        branch,            # WarehouseScope: branch
+        *warehouses,       # WarehouseScope: w.name IN (...)
+        company,           # QualityStock: SLE company
+        inventory_date,    # QualityStock: posting date cutoff
+        company,           # LastSLE: SLE company
+        inventory_date,    # LastSLE: posting date cutoff
     ]
 
     rows = frappe.db.sql(sql_query, params, as_dict=True)
