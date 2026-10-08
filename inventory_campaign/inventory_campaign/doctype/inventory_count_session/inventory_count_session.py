@@ -32,9 +32,13 @@ class InventoryCountSession(Document):
         self.calculate_inventory_differences()
 
     def before_submit(self):
-        # Session-level rule only: every row must have been physically counted.
-        # Once Stock Entry creation starts, ERPNext standard validations are the
-        # sole authority for the Stock Entry and its items.
+        # negative_stock is a recount flag created by historical roll-forward.
+        # It must never prevent Draft Save, but it must block Submit until a
+        # counter has physically recounted and replaced the impossible value.
+        self.validate_negative_stock_rows()
+
+        # Session-level rules only. Once Stock Entry creation starts, ERPNext
+        # standard validations are the sole authority for Stock Entry/items.
         self.validate_all_lines_are_counted()
         self.validate_manual_valuation_rates()
 
@@ -127,6 +131,9 @@ class InventoryCountSession(Document):
                 physical_count = flt(row.physical_count)
                 physical_stock_value = flt(row.physical_stock_value)
 
+                if physical_count < 0:
+                    row.negative_stock = 1
+
                 row.quantity_difference = physical_count
                 row.valuation_rate = flt(
                     physical_stock_value / physical_count
@@ -174,6 +181,13 @@ class InventoryCountSession(Document):
                 continue
 
             physical_count = flt(row.physical_count)
+
+            # Never manufacture a valid state from an impossible negative count.
+            # The flag is only set automatically here; it is cleared by an explicit
+            # non-negative physical recount in the client.
+            if physical_count < 0:
+                row.negative_stock = 1
+
             row.quantity_difference = flt(physical_count - qty_in_ct)
 
             # Keep the initialized state exactly neutral even when qty_in_ct is zero
@@ -210,6 +224,35 @@ class InventoryCountSession(Document):
             current_session=self.name,
             lock_warehouses=True,
         )
+
+    def validate_negative_stock_rows(self):
+        """Block Submit while a roll-forward line still requires recount."""
+
+        negative_rows = []
+
+        for row in self.get("table_uawl") or []:
+            if cint(row.get("negative_stock")) or (
+                not self._is_blank(row.get("physical_count"))
+                and flt(row.get("physical_count")) < 0
+            ):
+                row.negative_stock = 1
+                negative_rows.append(
+                    "Row {0}: {1} | {2} | {3} | Physical Count {4}".format(
+                        row.idx,
+                        row.item_code or "",
+                        row.warehouse or "",
+                        row.quality_status or "",
+                        row.physical_count,
+                    )
+                )
+
+        if negative_rows:
+            frappe.throw(
+                "A physical recount is required before this Inventory Count Session "
+                "can be submitted.<br><br>"
+                + "<br>".join(negative_rows),
+                title="Physical Recount Required",
+            )
 
     def validate_all_lines_are_counted(self):
         missing_rows = []

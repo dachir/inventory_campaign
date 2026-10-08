@@ -23,7 +23,9 @@
   "physical_stock_value",
   "difference_amount",
   "manual_valuation_required",
-  "manual_entry"
+  "manual_entry",
+  "source_inventory_json",
+  "negative_stock"
  ],
  "fields": [
   {
@@ -140,13 +142,26 @@
    "fieldtype": "Check",
    "label": "Manual Entry",
    "read_only": 1
+  },
+  {
+   "fieldname": "source_inventory_json",
+   "fieldtype": "Long Text",
+   "label": "Source Inventory",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "negative_stock",
+   "fieldtype": "Check",
+   "label": "Negative Stock",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-09-30 11:00:05.684463",
+ "modified": "2026-10-08 12:21:03.879231",
  "modified_by": "Administrator",
  "module": "Inventory Campaign",
  "name": "Inventory Count Session Detail",

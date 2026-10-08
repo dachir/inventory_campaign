@@ -12,6 +12,7 @@
   "column_break_wpvz",
   "inventory_date",
   "difference_amount",
+  "source_inventory_session",
   "section_break_rejw",
   "table_uawl",
   "section_break_uu8x",
@@ -72,6 +73,13 @@
    "fieldtype": "Table MultiSelect",
    "label": "Inventory Count Warehouses",
    "options": "Inventory Count Warehouses"
+  },
+  {
+   "fieldname": "source_inventory_session",
+   "fieldtype": "Link",
+   "label": "Source Inventory Session",
+   "options": "Inventory Session",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
@@ -83,7 +91,7 @@
    "link_fieldname": "custom_inventory_count_session"
   }
  ],
- "modified": "2026-09-28 17:51:49.995864",
+ "modified": "2026-10-07 21:32:46.699625",
  "modified_by": "Administrator",
  "module": "Inventory Campaign",
  "name": "Inventory Count Session",

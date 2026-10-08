@@ -24,6 +24,15 @@ frappe.ui.form.on("Inventory Count Session", {
 
 frappe.ui.form.on("Inventory Count Session Detail", {
     physical_count(frm, cdt, cdn) {
+        const row = locals[cdt][cdn];
+
+        // A generated negative count means that the three-month roll-forward
+        // cannot produce a physically possible quantity.  The flag is cleared
+        // only when a user enters a new non-negative physical recount.
+        if (!is_blank(row.physical_count)) {
+            row.negative_stock = to_number(row.physical_count) < 0 ? 1 : 0;
+        }
+
         recalculate_inventory_row(frm, cdt, cdn);
     },
 
@@ -57,6 +66,10 @@ frappe.ui.form.on("Inventory Count Session Detail", {
     },
 
     manual_valuation_required(frm, cdt, cdn) {
+        refresh_manual_valuation_grid_rows(frm);
+    },
+
+    negative_stock(frm, cdt, cdn) {
         refresh_manual_valuation_grid_rows(frm);
     },
 
@@ -205,6 +218,7 @@ function add_manual_inventory_entry(frm) {
                     row.difference_amount = physical_stock_value;
                     row.manual_valuation_required = 0;
                     row.manual_entry = 1;
+                    row.negative_stock = 0;
 
                     dialog.hide();
                     frm.refresh_field(detail_field);
@@ -343,6 +357,7 @@ async function load_inventory_snapshot(frm, warehouses, detail_field) {
 
         apply_snapshot_values_to_row(row, data);
         row.manual_entry = 0;
+        row.negative_stock = 0;
 
         // Initialization is deliberately neutral: the physical values start
         // equal to the ERP snapshot and only user changes create a variance.
@@ -656,6 +671,7 @@ function apply_manual_valuation_state(grid_row) {
 
     const manual_required = cint(grid_row.doc.manual_valuation_required) === 1;
     const manual_entry = cint(grid_row.doc.manual_entry) === 1;
+    const negative_stock = cint(grid_row.doc.negative_stock) === 1;
 
     // Standard zero-stock rows may unlock valuation_rate when no historical
     // valuation exists. Fully manual rows instead unlock Physical Stock Value;
@@ -675,6 +691,7 @@ function apply_manual_valuation_state(grid_row) {
     // so setting only grid_row.wrapper background is not enough.
     $wrapper.toggleClass("inventory-manual-valuation-required", manual_required);
     $wrapper.toggleClass("inventory-manual-entry", manual_entry);
+    $wrapper.toggleClass("inventory-negative-stock", negative_stock);
 
     // Immediate inline fallback. The injected CSS below uses !important and is
     // the authoritative visual rule, but this also makes the state visible
@@ -682,7 +699,10 @@ function apply_manual_valuation_state(grid_row) {
     let background = "";
     let text_color = "";
 
-    if (manual_required) {
+    if (negative_stock) {
+        background = "#FFC7CE";
+        text_color = "#9C0006";
+    } else if (manual_required) {
         background = "#FFEB9C";
         text_color = "#9C5700";
     } else if (manual_entry) {
@@ -713,6 +733,26 @@ function ensure_inventory_exception_row_styles() {
     const style = document.createElement("style");
     style.id = style_id;
     style.textContent = `
+        .grid-row.inventory-negative-stock > .data-row,
+        .grid-row.inventory-negative-stock .data-row,
+        .grid-row.inventory-negative-stock .grid-static-col,
+        .grid-row.inventory-negative-stock .row-index,
+        .grid-row.inventory-negative-stock .grid-row-check,
+        .grid-row.inventory-negative-stock .grid-row-open {
+            background-color: #FFC7CE !important;
+            color: #9C0006 !important;
+        }
+
+        .grid-row.inventory-negative-stock .data-row a,
+        .grid-row.inventory-negative-stock .data-row .static-area,
+        .grid-row.inventory-negative-stock .data-row .like-disabled-input,
+        .grid-row.inventory-negative-stock .data-row .form-control,
+        .grid-row.inventory-negative-stock .data-row input,
+        .grid-row.inventory-negative-stock .data-row select,
+        .grid-row.inventory-negative-stock .data-row textarea {
+            color: #9C0006 !important;
+        }
+
         .grid-row.inventory-manual-entry > .data-row,
         .grid-row.inventory-manual-entry .data-row,
         .grid-row.inventory-manual-entry .grid-static-col,
