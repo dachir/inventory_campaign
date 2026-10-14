@@ -14,6 +14,8 @@
   "operator_user",
   "operator_name",
   "device_id",
+  "column_break_jbux",
+  "summary",
   "scope_section",
   "zone",
   "item_group",
@@ -448,17 +450,26 @@
    "print_hide": 1,
    "read_only": 1,
    "search_index": 1
+  },
+  {
+   "fieldname": "column_break_jbux",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "HTML",
+   "label": "Summary"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-19 11:00:46.021457",
+ "modified": "2026-10-14 10:31:07.003758",
  "modified_by": "Administrator",
  "module": "Inventory Campaign",
  "name": "Inventory Session",
- "naming_rule": "Expression",
+ "naming_rule": "Expression (old style)",
  "owner": "Administrator",
  "permissions": [
   {
@@ -520,6 +531,7 @@
   }
  ],
  "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],

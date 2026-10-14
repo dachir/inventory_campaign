@@ -13,46 +13,88 @@ class InventorySession(Document):
 
 
 @frappe.whitelist()
-def create_inventory_count_session(inventory_session: str) -> str:
-    """Clean one mobile Inventory Session and create a current Draft Count Session.
+def get_inventory_session_audit(inventory_session: str) -> dict:
+    """Preview the shared reconciliation, including zero-variance audit report."""
+    plan = _build_inventory_audit_plan(inventory_session)
+    return {"summary": plan["summary"], "report": plan["report"]}
 
-    The mobile Inventory Session is historical evidence.  We first clean its
-    physical rows and repeated ``system_stock_json`` snapshots, then reconstruct
-    the historical variance by Item + Warehouse + Quality Status.  Finally that
-    variance is rolled forward onto the current ERP stock:
 
-        adjusted physical today = current system stock + historical variance
+@frappe.whitelist()
+def create_inventory_count_session(inventory_session: str, mode: str = "variance") -> dict:
+    """Generate only variance or zero-variance relocation lines; Draft insert only."""
+    if mode not in ("variance", "zero_relocation"):
+        frappe.throw("Unknown transfer mode.")
+    plan = _build_inventory_audit_plan(inventory_session)
+    source = plan["source"]
+    # One active result per source and mode, without introducing a new DocType field.
+    existing_names = frappe.get_all(
+        "Inventory Count Session",
+        filters={"source_inventory_session": source.name, "docstatus": ["<", 2]},
+        pluck="name",
+    )
+    for name in existing_names:
+        first_line = frappe.db.get_value(
+            "Inventory Count Session Detail",
+            {"parent": name, "parenttype": "Inventory Count Session",
+             "parentfield": "table_uawl"}, "source_inventory_json",
+            order_by="idx asc",
+        )
+        try:
+            info = frappe.parse_json(first_line or "{}")
+        except (ValueError, TypeError):
+            info = {}
+        prior_mode = info.get("transfer_mode", "variance")
+        if prior_mode == mode:
+            frappe.throw("An active Inventory Count Session {0} already exists for this transfer type.".format(name))
 
-    If the adjusted physical quantity becomes negative, the line is still
-    created but ``negative_stock`` is flagged so a physical recount is required
-    before Inventory Count Session can be submitted.
+    selected = []
+    for entry in plan["records"]:
+        item = entry["item_code"]
+        delta = entry["difference_qty_stock_uom"]
+        if mode == "variance":
+            include = item not in plan["zero_items"] and abs(delta) > 0.000001
+        else:
+            # Zero total variance is insufficient: actual local warehouse moves required.
+            include = item in plan["moved_items"] and abs(delta) > 0.000001
+        if include:
+            selected.append(entry)
 
-    The target Inventory Count Session is INSERTED only (Draft), never submitted.
-    """
+    if not selected:
+        return {"created": False, "name": None, "mode": mode,
+                "message": ("No location changes to validate." if mode == "zero_relocation"
+                            else "No non-zero inventory differences require treatment."),
+                "summary": plan["summary"]}
 
+    count_session = frappe.new_doc("Inventory Count Session")
+    count_session.inventory_campaign = source.campaign
+    count_session.branch = plan["campaign"].branch
+    count_session.inventory_date = plan["target_date"]
+    count_session.source_inventory_session = source.name
+    involved_warehouses = sorted({e["warehouse"] for e in selected})
+    for warehouse in involved_warehouses:
+        count_session.append("inventory_count_warehouses", {"warehouse": warehouse})
+    for entry in selected:
+        values = dict(entry["detail_values"])
+        evidence = frappe.parse_json(values["source_inventory_json"])
+        evidence["transfer_mode"] = mode
+        values["source_inventory_json"] = frappe.as_json(evidence)
+        count_session.append("table_uawl", values)
+    count_session.insert()
+    return {"created": True, "name": count_session.name, "mode": mode,
+            "summary": plan["summary"], "lines": len(selected)}
+
+
+def _build_inventory_audit_plan(inventory_session: str) -> dict:
+    """Single source of truth: clean, match, roll-forward and classify."""
     if not inventory_session:
         frappe.throw("Inventory Session is required.")
 
     source = frappe.get_doc("Inventory Session", inventory_session)
+    source.check_permission("read")
 
     if source.docstatus != 1:
         frappe.throw(
             "Inventory Session must be submitted before creating an Inventory Count Session."
-        )
-
-    existing = frappe.db.get_value(
-        "Inventory Count Session",
-        {
-            "source_inventory_session": source.name,
-            "docstatus": ["<", 2],
-        },
-        "name",
-    )
-    if existing:
-        frappe.throw(
-            "Inventory Count Session {0} already exists for Inventory Session {1}.".format(
-                frappe.bold(existing), frappe.bold(source.name)
-            )
         )
 
     if not source.campaign:
@@ -107,16 +149,14 @@ def create_inventory_count_session(inventory_session: str) -> str:
     #    by Initialize Inventory / Recalculate Values.
     # ------------------------------------------------------------------
     from inventory_campaign.inventory_campaign.doctype.inventory_count_session.inventory_count_session import (
-        get_inventory_snapshot,
-        get_manual_inventory_entry_defaults,
+        _query_inventory_snapshot,
     )
 
-    current_snapshot_rows = get_inventory_snapshot(
-        inventory_campaign=source.campaign,
+    current_snapshot_rows = _query_inventory_snapshot(
+        company=campaign.company,
         inventory_date=str(target_inventory_date),
         branch=campaign.branch,
         warehouses=warehouses,
-        inventory_count_session=None,
     )
 
     current_snapshot_rows = [
@@ -144,19 +184,8 @@ def create_inventory_count_session(inventory_session: str) -> str:
     # 4. Create the Draft Count Session for TODAY and roll the historical
     #    variance forward onto today's theoretical stock.
     # ------------------------------------------------------------------
-    count_session = frappe.new_doc("Inventory Count Session")
-    count_session.inventory_campaign = source.campaign
-    count_session.branch = campaign.branch
-    count_session.inventory_date = target_inventory_date
-    count_session.source_inventory_session = source.name
-
-    for warehouse in warehouses:
-        count_session.append(
-            "inventory_count_warehouses",
-            {"warehouse": warehouse},
-        )
-
     defaults_cache = {}
+    detail_records = []
     negative_rows = 0
 
     for key in sorted(all_keys):
@@ -207,15 +236,9 @@ def create_inventory_count_session(inventory_session: str) -> str:
         else:
             defaults_key = (item_code, warehouse)
             if defaults_key not in defaults_cache:
-                defaults_cache[defaults_key] = get_manual_inventory_entry_defaults(
-                    inventory_campaign=source.campaign,
-                    inventory_date=str(target_inventory_date),
-                    branch=campaign.branch,
-                    item_code=item_code,
-                    warehouse=warehouse,
+                defaults_cache[defaults_key] = _get_mobile_detail_defaults(
+                    item_code=item_code, warehouse=warehouse,
                     quality_status=quality_status,
-                    selected_warehouses=warehouses,
-                    inventory_count_session=None,
                 )
 
             defaults = defaults_cache[defaults_key]
@@ -261,27 +284,85 @@ def create_inventory_count_session(inventory_session: str) -> str:
             }
         )
 
-        count_session.append("table_uawl", detail_values)
+        detail_records.append({
+            "item_code": item_code,
+            "warehouse": warehouse,
+            "quality_status": quality_status,
+            "difference_qty_stock_uom": historical_difference_qty,
+            "detail_values": detail_values,
+            "historical_system_qty": historical_system_qty,
+            "historical_physical_qty": historical_physical_qty,
+            "current_system_qty": current_system_qty,
+            "adjusted_physical_qty": adjusted_physical_qty,
+        })
 
-    # INSERT ONLY. The target remains Draft (docstatus = 0).  Its normal
-    # validate() method calculates valuation / differences on the new current
-    # snapshot.  negative_stock does not block Save; it blocks Submit only.
-    count_session.insert()
+    # Item-level zero variance, including compensating location changes.
+    item_differences = {}
+    warehouse_differences = {}
+    for entry in detail_records:
+        item = entry["item_code"]
+        amount = entry["difference_qty_stock_uom"]
+        item_differences[item] = item_differences.get(item, 0.0) + amount
+        wh_key = (item, entry["warehouse"])
+        warehouse_differences[wh_key] = warehouse_differences.get(wh_key, 0.0) + amount
 
-    count_session.add_comment(
-        "Info",
-        (
-            "Created from Inventory Session {0}. Historical count date: {1}; "
-            "rolled forward to ERP stock date: {2}. Recount-required rows: {3}."
-        ).format(
-            source.name,
-            historical_inventory_date,
-            target_inventory_date,
-            negative_rows,
-        ),
-    )
+    zero_items = {item for item, qty in item_differences.items() if abs(qty) <= 0.000001}
+    moved_items = set()
+    for item in zero_items:
+        wh_deltas = [d for (i, w), d in warehouse_differences.items() if i == item]
+        if any(d > 0.000001 for d in wh_deltas) and any(d < -0.000001 for d in wh_deltas):
+            moved_items.add(item)
 
-    return count_session.name
+    raw_line_count = len([r for r in source.get("items") or [] if r.get("item_code")])
+    duplicates_count = sum(len(row.get("duplicate_row_ids") or []) for row in physical_rows)
+    summary = {
+        "raw_lines": raw_line_count,
+        "duplicates_removed": duplicates_count,
+        "matched": sum(1 for r in physical_rows if (r.get("match") or {}).get("system")),
+        "moved": sum(1 for r in physical_rows if (r.get("match") or {}).get("base_match_type") == "MOVED"),
+        "ambiguous": sum(1 for r in physical_rows if (r.get("match") or {}).get("ambiguous")),
+        "zero_variance_items": len(zero_items),
+        "relocated_zero_variance_items": len(moved_items),
+        "variance_items": len(item_differences) - len(zero_items),
+        "recount_rows": negative_rows,
+    }
+    report = []
+    for entry in detail_records:
+        if entry["item_code"] not in zero_items:
+            continue
+        item = entry["item_code"]
+        detail = entry["detail_values"]
+        source_data = frappe.parse_json(detail.get("source_inventory_json") or "{}")
+        origin = []
+        for source_part in source_data.get("sources") or []:
+            matched = source_part.get("matched_system") or {}
+            wh = matched.get("warehouse")
+            if wh and wh not in origin:
+                origin.append(wh)
+        report.append({
+            "item_code": item,
+            "item_name": detail.get("item_name"),
+            "warehouse": entry["warehouse"],
+            "previous_warehouses": origin,
+            "quality_status": entry["quality_status"],
+            "historical_system_qty": entry["historical_system_qty"],
+            "historical_physical_qty": entry["historical_physical_qty"],
+            "current_system_qty": entry["current_system_qty"],
+            "adjusted_physical_qty": entry["adjusted_physical_qty"],
+            "difference_qty": entry["difference_qty_stock_uom"],
+            "valuation_rate_ct": flt(detail.get("valuation_rate")),
+            "ct_conversion_factor": flt(detail.get("ct_conversion_factor")) or 1.0,
+            "stock_value": flt(detail.get("stock_valuation")),
+            "is_relocation": item in moved_items,
+        })
+    return {
+        "source": source, "campaign": campaign, "target_date": target_inventory_date,
+        "historical_date": historical_inventory_date, "warehouses": warehouses,
+        "records": detail_records, "zero_items": zero_items,
+        "moved_items": moved_items, "summary": summary, "report": report,
+        "negative_rows": negative_rows,
+    }
+
 
 def _prepare_inventory_session_rows(source):
     """Return deduplicated physical rows and a unique system occurrence pool."""
@@ -683,3 +764,27 @@ def _qty_key(value):
 
 def _same_qty(left, right):
     return abs(flt(left) - flt(right)) <= 0.000001
+
+
+def _get_mobile_detail_defaults(item_code: str, warehouse: str, quality_status: str) -> dict:
+    """Metadata for missing ERP snapshot combinations, without manual-session locks."""
+    item = frappe.db.get_value(
+        "Item", item_code, ["item_group", "item_name", "stock_uom"], as_dict=True
+    )
+    warehouse_info = frappe.db.get_value(
+        "Warehouse", warehouse, ["account", "parent_warehouse"], as_dict=True
+    )
+    if not item or not warehouse_info:
+        frappe.throw("Missing Item/Warehouse master data: {0} / {1}".format(item_code, warehouse))
+    account = warehouse_info.account
+    if not account and warehouse_info.parent_warehouse:
+        account = frappe.db.get_value("Warehouse", warehouse_info.parent_warehouse, "account")
+    factor = frappe.db.get_value(
+        "UOM Conversion Detail",
+        {"parent": item_code, "parenttype": "Item", "parentfield": "uoms", "uom": "CT"},
+        "conversion_factor",
+    )
+    return {"item_group": item.item_group, "item_code": item_code,
+            "item_name": item.item_name, "stock_uom": item.stock_uom,
+            "warehouse": warehouse, "quality_status": quality_status,
+            "stock_account": account, "ct_conversion_factor": flt(factor) or 1.0}

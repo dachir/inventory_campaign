@@ -27,8 +27,11 @@ class InventoryCountSession(Document):
     def validate(self):
         # A Count Session must stay inside its campaign period, and a Warehouse
         # may belong to only one active Count Session during that period.
-        self.validate_campaign_period()
-        self.validate_warehouse_period_exclusivity()
+        # Mobile-derived sessions use current stock and may share warehouse scope.
+        # Preserve the original exclusive/date validations for manual sessions.
+        if not self.get("source_inventory_session"):
+            self.validate_campaign_period()
+            self.validate_warehouse_period_exclusivity()
         self.calculate_inventory_differences()
 
     def before_submit(self):
